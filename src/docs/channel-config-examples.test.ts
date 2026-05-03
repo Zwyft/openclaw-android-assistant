@@ -11,6 +11,34 @@ function lineNumberAt(source: string, index: number): number {
 }
 
 describe("channel docs config examples", () => {
+  it("keeps channel docs JSON fences parseable", () => {
+    const failures: string[] = [];
+    for (const fileName of fs
+      .readdirSync(CHANNEL_DOCS_DIR)
+      .filter((entry) => entry.endsWith(".md"))) {
+      const docPath = path.join(CHANNEL_DOCS_DIR, fileName);
+      const markdown = fs.readFileSync(docPath, "utf8");
+      const blocks = markdown.matchAll(/```(?:json5|json)\n([\s\S]*?)```/g);
+      for (const match of blocks) {
+        const code = match[1] ?? "";
+        const location = `${fileName}:${lineNumberAt(markdown, match.index ?? 0)}`;
+        const isStrictJson = match[0].startsWith("```json\n");
+        try {
+          if (isStrictJson) {
+            JSON.parse(code);
+          } else {
+            JSON5.parse(code);
+          }
+        } catch (error) {
+          failures.push(
+            `${location} ${isStrictJson ? "JSON" : "JSON5"} parse failed: ${String(error)}`,
+          );
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
   it("keeps OpenClaw channel config snippets parseable and schema-valid", () => {
     const failures: string[] = [];
     for (const fileName of fs
