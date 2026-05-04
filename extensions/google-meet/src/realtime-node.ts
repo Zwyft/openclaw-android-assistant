@@ -15,11 +15,15 @@ import {
 import type { GoogleMeetConfig } from "./config.js";
 import {
   getGoogleMeetRealtimeTranscriptHealth,
+  buildGoogleMeetSpeakExactUserMessage,
+  GOOGLE_MEET_AGENT_TRANSCRIPT_DEBOUNCE_MS,
+  extendGoogleMeetOutputEchoSuppression,
   getGoogleMeetRealtimeEventHealth,
   recordGoogleMeetRealtimeTranscript,
   recordGoogleMeetRealtimeEvent,
   resolveGoogleMeetRealtimeAudioFormat,
   resolveGoogleMeetRealtimeProvider,
+  isGoogleMeetLikelyAssistantEchoTranscript,
   type GoogleMeetRealtimeEventEntry,
   type GoogleMeetRealtimeTranscriptEntry,
 } from "./realtime.js";
@@ -63,6 +67,10 @@ export async function startNodeRealtimeAudioBridge(params: {
   let lastClearAt: string | undefined;
   let lastInputBytes = 0;
   let lastOutputBytes = 0;
+  let suppressedInputBytes = 0;
+  let lastSuppressedInputAt: string | undefined;
+  let suppressInputUntil = 0;
+  let lastOutputPlayableUntilMs = 0;
   let consecutiveInputErrors = 0;
   let lastInputError: string | undefined;
   let clearCount = 0;
@@ -73,12 +81,95 @@ export async function startNodeRealtimeAudioBridge(params: {
   });
   const transcript: GoogleMeetRealtimeTranscriptEntry[] = [];
   const realtimeEvents: GoogleMeetRealtimeEventEntry[] = [];
+  const strategy = params.config.realtime.strategy;
+  let agentConsultActive = false;
+  let pendingAgentQuestion: string | undefined;
+  let agentConsultDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  const enqueueAgentConsultForUserTranscript = (question: string): void => {
+    const trimmed = question.trim();
+    if (!trimmed || stopped) {
+      return;
+    }
+    pendingAgentQuestion = pendingAgentQuestion ? `${pendingAgentQuestion}\n${trimmed}` : trimmed;
+    if (agentConsultDebounceTimer) {
+      clearTimeout(agentConsultDebounceTimer);
+    }
+    agentConsultDebounceTimer = setTimeout(() => {
+      agentConsultDebounceTimer = undefined;
+      const queuedQuestion = pendingAgentQuestion;
+      pendingAgentQuestion = undefined;
+      if (queuedQuestion && !stopped) {
+        void runAgentConsultForUserTranscript(queuedQuestion);
+      }
+    }, GOOGLE_MEET_AGENT_TRANSCRIPT_DEBOUNCE_MS);
+    agentConsultDebounceTimer.unref?.();
+  };
+  const runAgentConsultForUserTranscript = async (question: string): Promise<void> => {
+    const trimmed = question.trim();
+    if (!trimmed || stopped) {
+      return;
+    }
+    if (agentConsultActive) {
+      pendingAgentQuestion = trimmed;
+      return;
+    }
+    agentConsultActive = true;
+    let nextQuestion: string | undefined = trimmed;
+    try {
+      while (nextQuestion) {
+        if (stopped) {
+          return;
+        }
+        const currentQuestion = nextQuestion;
+        pendingAgentQuestion = undefined;
+        params.logger.info(`[google-meet] node realtime agent consult: ${currentQuestion}`);
+        const result = await consultOpenClawAgentForGoogleMeet({
+          config: params.config,
+          fullConfig: params.fullConfig,
+          runtime: params.runtime,
+          logger: params.logger,
+          meetingSessionId: params.meetingSessionId,
+          args: {
+            question: currentQuestion,
+            responseStyle: "Brief, natural spoken answer for a live meeting.",
+          },
+          transcript,
+        });
+        if (!stopped && result.text.trim()) {
+          bridge?.sendUserMessage(buildGoogleMeetSpeakExactUserMessage(result.text.trim()));
+        }
+        nextQuestion = pendingAgentQuestion;
+      }
+    } catch (error) {
+      params.logger.warn(
+        `[google-meet] node realtime agent consult failed: ${formatErrorMessage(error)}`,
+      );
+      if (!stopped) {
+        bridge?.sendUserMessage(
+          buildGoogleMeetSpeakExactUserMessage(
+            "I hit an error while checking that. Please try again.",
+          ),
+        );
+      }
+    } finally {
+      agentConsultActive = false;
+      const queuedQuestion = pendingAgentQuestion;
+      pendingAgentQuestion = undefined;
+      if (queuedQuestion && !stopped) {
+        void runAgentConsultForUserTranscript(queuedQuestion);
+      }
+    }
+  };
 
   const stop = async () => {
     if (stopped) {
       return;
     }
     stopped = true;
+    if (agentConsultDebounceTimer) {
+      clearTimeout(agentConsultDebounceTimer);
+      agentConsultDebounceTimer = undefined;
+    }
     try {
       bridge?.close();
     } catch (error) {
@@ -106,12 +197,23 @@ export async function startNodeRealtimeAudioBridge(params: {
     audioFormat: resolveGoogleMeetRealtimeAudioFormat(params.config),
     instructions: params.config.realtime.instructions,
     initialGreetingInstructions: params.config.realtime.introMessage,
+    autoRespondToAudio: strategy === "bidi",
     triggerGreetingOnReady: false,
     markStrategy: "ack-immediately",
-    tools: resolveGoogleMeetRealtimeTools(params.config.realtime.toolPolicy),
+    tools:
+      strategy === "bidi" ? resolveGoogleMeetRealtimeTools(params.config.realtime.toolPolicy) : [],
     audioSink: {
       isOpen: () => !stopped,
       sendAudio: (audio) => {
+        const suppression = extendGoogleMeetOutputEchoSuppression({
+          audio,
+          audioFormat: params.config.chrome.audioFormat,
+          nowMs: Date.now(),
+          lastOutputPlayableUntilMs,
+          suppressInputUntilMs: suppressInputUntil,
+        });
+        suppressInputUntil = suppression.suppressInputUntilMs;
+        lastOutputPlayableUntilMs = suppression.lastOutputPlayableUntilMs;
         lastOutputAt = new Date().toISOString();
         lastOutputBytes += audio.byteLength;
         void params.runtime.nodes
@@ -135,6 +237,8 @@ export async function startNodeRealtimeAudioBridge(params: {
       clearAudio: () => {
         lastClearAt = new Date().toISOString();
         clearCount += 1;
+        suppressInputUntil = 0;
+        lastOutputPlayableUntilMs = 0;
         void params.runtime.nodes
           .invoke({
             nodeId: params.nodeId,
@@ -157,16 +261,38 @@ export async function startNodeRealtimeAudioBridge(params: {
       if (isFinal) {
         recordGoogleMeetRealtimeTranscript(transcript, role, text);
         params.logger.info(`[google-meet] node realtime ${role}: ${text}`);
+        if (role === "user" && strategy === "agent") {
+          if (isGoogleMeetLikelyAssistantEchoTranscript({ transcript, text })) {
+            params.logger.info(
+              `[google-meet] node realtime ignored assistant echo transcript: ${text}`,
+            );
+            return;
+          }
+          enqueueAgentConsultForUserTranscript(text);
+        }
       }
     },
     onEvent: (event) => {
       recordGoogleMeetRealtimeEvent(realtimeEvents, event);
-      if (event.type === "error" || event.type === "response.done") {
+      if (
+        event.type === "error" ||
+        event.type === "response.done" ||
+        event.type === "input_audio_buffer.speech_started" ||
+        event.type === "input_audio_buffer.speech_stopped" ||
+        event.type === "conversation.item.input_audio_transcription.completed" ||
+        event.type === "conversation.item.input_audio_transcription.failed"
+      ) {
         const detail = event.detail ? ` ${event.detail}` : "";
         params.logger.info(`[google-meet] node realtime ${event.direction}:${event.type}${detail}`);
       }
     },
     onToolCall: (event, session) => {
+      if (strategy !== "bidi") {
+        session.submitToolResult(event.callId || event.itemId, {
+          error: `Tool "${event.name}" is only available in bidi realtime strategy`,
+        });
+        return;
+      }
       if (event.name !== GOOGLE_MEET_AGENT_CONSULT_TOOL_NAME) {
         session.submitToolResult(event.callId || event.itemId, {
           error: `Tool "${event.name}" not available`,
@@ -229,6 +355,11 @@ export async function startNodeRealtimeAudioBridge(params: {
         const base64 = readString(result.base64);
         if (base64) {
           const audio = Buffer.from(base64, "base64");
+          if (Date.now() < suppressInputUntil) {
+            lastSuppressedInputAt = new Date().toISOString();
+            suppressedInputBytes += audio.byteLength;
+            continue;
+          }
           lastInputAt = new Date().toISOString();
           lastInputBytes += audio.byteLength;
           bridge?.sendAudio(audio);
@@ -269,9 +400,11 @@ export async function startNodeRealtimeAudioBridge(params: {
       audioOutputActive: lastOutputBytes > 0,
       lastInputAt,
       lastOutputAt,
+      lastSuppressedInputAt,
       lastClearAt,
       lastInputBytes,
       lastOutputBytes,
+      suppressedInputBytes,
       ...getGoogleMeetRealtimeTranscriptHealth(transcript),
       ...getGoogleMeetRealtimeEventHealth(realtimeEvents),
       consecutiveInputErrors,

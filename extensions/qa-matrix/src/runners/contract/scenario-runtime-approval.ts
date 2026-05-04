@@ -4,6 +4,7 @@ import { MATRIX_QA_DRIVER_DM_ROOM_KEY, resolveMatrixQaScenarioRoomId } from "./s
 import {
   advanceMatrixQaActorCursor,
   buildMatrixQaToken,
+  createMatrixQaDriverScenarioClient,
   createMatrixQaScenarioClient,
   primeMatrixQaDriverScenarioClient,
   type MatrixQaScenarioContext,
@@ -145,10 +146,7 @@ async function reactToApproval(params: {
   roomId: string;
   targetEventId: string;
 }) {
-  const client = createMatrixQaScenarioClient({
-    accessToken: params.context.driverAccessToken,
-    baseUrl: params.context.baseUrl,
-  });
+  const client = createMatrixQaDriverScenarioClient(params.context);
   const emoji =
     params.decision === "allow-once"
       ? MATRIX_QA_APPROVAL_ALLOW_ONCE_REACTION
@@ -179,6 +177,23 @@ async function reactToApproval(params: {
     messageId: params.targetEventId,
     roomId: params.roomId,
   });
+  await client
+    .waitForRoomEvent({
+      observedEvents: params.context.observedEvents,
+      predicate: (event) =>
+        event.roomId === params.roomId &&
+        event.sender === params.context.driverUserId &&
+        event.type === "m.reaction" &&
+        event.reaction?.eventId === params.targetEventId &&
+        event.reaction.key === emoji,
+      roomId: params.roomId,
+      timeoutMs: params.context.timeoutMs,
+    })
+    .catch((err: unknown) => {
+      throw new Error(
+        `Matrix approval reaction ${eventId} was not observed before waiting for the gateway decision: ${String(err)}`,
+      );
+    });
   return {
     eventId,
     reaction: {
