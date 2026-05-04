@@ -805,6 +805,18 @@ export async function runEmbeddedPiAgent(
       const rateLimitProfileRotationLimit = resolveRateLimitProfileRotationLimit(params.config);
       let activeSessionId = params.sessionId;
       let activeSessionFile = params.sessionFile;
+      let suppressNextUserMessagePersistence = params.suppressNextUserMessagePersistence ?? false;
+      // Pi owns JSONL persistence; this marker only lets the outer retry avoid
+      // replaying the same inbound channel message after overflow compaction.
+      let lastPersistedCurrentMessageId: string | number | undefined;
+      const onUserMessagePersisted: RunEmbeddedPiAgentParams["onUserMessagePersisted"] = (
+        message,
+      ) => {
+        if (params.currentMessageId !== undefined) {
+          lastPersistedCurrentMessageId = params.currentMessageId;
+        }
+        params.onUserMessagePersisted?.(message);
+      };
       const maybeEscalateRateLimitProfileFallback = (params: {
         failoverProvider: string;
         failoverModel: string;
@@ -1170,8 +1182,8 @@ export async function runEmbeddedPiAgent(
             bootstrapPromptWarningSignaturesSeen,
             bootstrapPromptWarningSignature:
               bootstrapPromptWarningSignaturesSeen[bootstrapPromptWarningSignaturesSeen.length - 1],
-            suppressNextUserMessagePersistence: params.suppressNextUserMessagePersistence,
-            onUserMessagePersisted: params.onUserMessagePersisted,
+            suppressNextUserMessagePersistence,
+            onUserMessagePersisted,
           });
           const attempt = normalizeEmbeddedRunAttemptResult(rawAttempt);
 
@@ -1634,6 +1646,15 @@ export async function runEmbeddedPiAgent(
                 log.info(`auto-compaction succeeded for ${provider}/${modelId}; retrying prompt`);
                 if (preflightRecovery?.source === "mid-turn") {
                   nextAttemptPromptOverride = MID_TURN_PRECHECK_CONTINUATION_PROMPT;
+                } else if (
+                  params.currentMessageId !== undefined &&
+                  params.currentMessageId === lastPersistedCurrentMessageId
+                ) {
+                  // The first attempt reached Pi far enough to persist this user turn.
+                  // Retrying the original prompt would replay it, so resume from the
+                  // compacted transcript and suppress the next user append.
+                  nextAttemptPromptOverride = MID_TURN_PRECHECK_CONTINUATION_PROMPT;
+                  suppressNextUserMessagePersistence = true;
                 }
                 continue;
               }

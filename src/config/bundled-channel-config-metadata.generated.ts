@@ -958,6 +958,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   exclusiveMinimum: 0,
                   maximum: 9007199254740991,
                 },
+                render: {
+                  type: "string",
+                  enum: ["text", "rich"],
+                },
                 toolProgress: {
                   type: "boolean",
                 },
@@ -2392,6 +2396,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                         exclusiveMinimum: 0,
                         maximum: 9007199254740991,
                       },
+                      render: {
+                        type: "string",
+                        enum: ["text", "rich"],
+                      },
                       toolProgress: {
                         type: "boolean",
                       },
@@ -3611,7 +3619,7 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
       },
       "streaming.preview.toolProgress": {
         label: "Discord Draft Tool Progress",
-        help: "Show tool/progress activity in the live draft preview message (default: true). Set false to keep tool updates as separate messages.",
+        help: "Show tool/progress activity in the live draft preview message (default: true). Set false to hide interim tool updates while the draft preview stays active.",
       },
       "streaming.progress.label": {
         label: "Discord Progress Label",
@@ -8876,7 +8884,7 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
       },
       "streaming.preview.toolProgress": {
         label: "Mattermost Draft Tool Progress",
-        help: "Show tool/progress activity in the live draft preview post (default: true). Set false to keep tool updates as separate messages.",
+        help: "Show tool/progress activity in the live draft preview post (default: true). Set false to hide interim tool updates while the draft preview stays active.",
       },
       "streaming.block.enabled": {
         label: "Mattermost Block Streaming Enabled",
@@ -9138,6 +9146,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   type: "integer",
                   exclusiveMinimum: 0,
                   maximum: 9007199254740991,
+                },
+                render: {
+                  type: "string",
+                  enum: ["text", "rich"],
                 },
                 toolProgress: {
                   type: "boolean",
@@ -12365,6 +12377,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   exclusiveMinimum: 0,
                   maximum: 9007199254740991,
                 },
+                render: {
+                  type: "string",
+                  enum: ["text", "rich"],
+                },
                 toolProgress: {
                   type: "boolean",
                 },
@@ -13327,6 +13343,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                         exclusiveMinimum: 0,
                         maximum: 9007199254740991,
                       },
+                      render: {
+                        type: "string",
+                        enum: ["text", "rich"],
+                      },
                       toolProgress: {
                         type: "boolean",
                       },
@@ -13884,7 +13904,7 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
       },
       "streaming.preview.toolProgress": {
         label: "Slack Draft Tool Progress",
-        help: "Show tool/progress activity in the live draft preview message (default: true). Set false to keep tool updates as separate messages.",
+        help: "Show tool/progress activity in the live draft preview message (default: true). Set false to hide interim tool updates while the draft preview stays active.",
       },
       "streaming.progress.label": {
         label: "Slack Progress Label",
@@ -13897,6 +13917,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
       "streaming.progress.maxLines": {
         label: "Slack Progress Max Lines",
         help: "Maximum number of compact progress lines to keep below the draft label (default: 8).",
+      },
+      "streaming.progress.render": {
+        label: "Slack Progress Renderer",
+        help: 'Progress draft renderer: "text" uses one portable text body; "rich" renders structured Slack Block Kit fields with the same text fallback.',
       },
       "streaming.progress.toolProgress": {
         label: "Slack Progress Tool Lines",
@@ -14693,6 +14717,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   type: "integer",
                   exclusiveMinimum: 0,
                   maximum: 9007199254740991,
+                },
+                render: {
+                  type: "string",
+                  enum: ["text", "rich"],
                 },
                 toolProgress: {
                   type: "boolean",
@@ -15793,6 +15821,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                         type: "integer",
                         exclusiveMinimum: 0,
                         maximum: 9007199254740991,
+                      },
+                      render: {
+                        type: "string",
+                        enum: ["text", "rich"],
                       },
                       toolProgress: {
                         type: "boolean",
