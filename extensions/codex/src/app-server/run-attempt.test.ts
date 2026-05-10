@@ -544,7 +544,7 @@ describe("runCodexAppServerAttempt", () => {
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
-  it("defaults Codex dynamic tools to the native-first profile", () => {
+  it("filters Codex-native dynamic tools from app-server tool exposure", () => {
     const tools = [
       "read",
       "write",
@@ -559,7 +559,7 @@ describe("runCodexAppServerAttempt", () => {
       "sessions_spawn",
     ].map((name) => ({ name }));
 
-    expect(__testing.applyCodexDynamicToolProfile(tools, {}).map((tool) => tool.name)).toEqual([
+    expect(__testing.filterCodexDynamicTools(tools, {}).map((tool) => tool.name)).toEqual([
       "web_search",
       "message",
       "heartbeat_respond",
@@ -567,17 +567,16 @@ describe("runCodexAppServerAttempt", () => {
     ]);
   });
 
-  it("allows Codex dynamic tool filtering to opt back into OpenClaw compatibility", () => {
+  it("applies additional Codex dynamic tool excludes without exposing Codex-native tools", () => {
     const tools = ["read", "exec", "message", "custom_tool"].map((name) => ({ name }));
 
     expect(
       __testing
-        .applyCodexDynamicToolProfile(tools, {
-          codexDynamicToolsProfile: "openclaw-compat",
+        .filterCodexDynamicTools(tools, {
           codexDynamicToolsExclude: ["custom_tool"],
         })
         .map((tool) => tool.name),
-    ).toEqual(["read", "exec", "message"]);
+    ).toEqual(["message"]);
   });
 
   it("starts Codex threads without duplicate OpenClaw workspace tools by default", async () => {
@@ -590,7 +589,7 @@ describe("runCodexAppServerAttempt", () => {
       }
       throw new Error(`unexpected method: ${method}`);
     });
-    const dynamicTools = __testing.applyCodexDynamicToolProfile(
+    const dynamicTools = __testing.filterCodexDynamicTools(
       [
         "read",
         "write",
@@ -2586,11 +2585,10 @@ describe("runCodexAppServerAttempt", () => {
       },
     });
 
-    await expect(run).resolves.toMatchObject({
-      assistantTexts: ["final completion"],
-      aborted: false,
-      timedOut: false,
-    });
+    const result = await run;
+    expect(result.assistantTexts).toEqual(["final completion"]);
+    expect(result.aborted).toBe(false);
+    expect(result.timedOut).toBe(false);
   });
 
   it("releases completion when a projector callback throws during turn/completed", async () => {
@@ -2641,10 +2639,9 @@ describe("runCodexAppServerAttempt", () => {
         },
       },
     });
-    await expect(run).resolves.toMatchObject({
-      aborted: false,
-      timedOut: false,
-    });
+    const result = await run;
+    expect(result.aborted).toBe(false);
+    expect(result.timedOut).toBe(false);
   });
 
   it("routes MCP approval elicitations through the native bridge", async () => {
@@ -2710,12 +2707,11 @@ describe("runCodexAppServerAttempt", () => {
       content: { approve: true },
       _meta: null,
     });
-    expect(bridgeSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        threadId: "thread-1",
-        turnId: "turn-1",
-      }),
-    );
+    const [bridgeCall] = bridgeSpy.mock.calls[0] as unknown as [
+      { threadId?: string; turnId?: string },
+    ];
+    expect(bridgeCall.threadId).toBe("thread-1");
+    expect(bridgeCall.turnId).toBe("turn-1");
 
     await notify({
       method: "turn/completed",
@@ -2892,41 +2888,31 @@ describe("runCodexAppServerAttempt", () => {
       content: null,
       _meta: null,
     });
-    expect(bridgeSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        threadId: "thread-1",
-        turnId: "turn-1",
-        pluginAppPolicyContext: expect.objectContaining({
-          apps: {
-            "google-calendar-app": expect.objectContaining({
-              pluginName: "google-calendar",
-              mcpServerNames: ["google-calendar"],
-            }),
-          },
-        }),
-      }),
-    );
-    expect(request).toHaveBeenCalledWith(
-      "thread/start",
-      expect.objectContaining({
-        approvalPolicy: {
-          granular: expect.objectContaining({
-            mcp_elicitations: true,
-          }),
-        },
-      }),
-    );
-    expect(request).toHaveBeenCalledWith(
-      "turn/start",
-      expect.objectContaining({
-        approvalPolicy: {
-          granular: expect.objectContaining({
-            mcp_elicitations: true,
-          }),
-        },
-      }),
-      expect.anything(),
-    );
+    const [bridgeCall] = bridgeSpy.mock.calls[0] as unknown as [
+      {
+        pluginAppPolicyContext?: {
+          apps?: Record<string, { mcpServerNames?: string[]; pluginName?: string }>;
+        };
+        threadId?: string;
+        turnId?: string;
+      },
+    ];
+    expect(bridgeCall.threadId).toBe("thread-1");
+    expect(bridgeCall.turnId).toBe("turn-1");
+    const calendarPolicy = bridgeCall.pluginAppPolicyContext?.apps?.["google-calendar-app"];
+    expect(calendarPolicy?.pluginName).toBe("google-calendar");
+    expect(calendarPolicy?.mcpServerNames).toEqual(["google-calendar"]);
+    const requestCalls = request.mock.calls as unknown as Array<[string, unknown, unknown?]>;
+    const threadStart = requestCalls.find(([method]) => method === "thread/start");
+    const threadStartParams = threadStart?.[1] as
+      | { approvalPolicy?: { granular?: { mcp_elicitations?: boolean } } }
+      | undefined;
+    expect(threadStartParams?.approvalPolicy?.granular?.mcp_elicitations).toBe(true);
+    const turnStart = requestCalls.find(([method]) => method === "turn/start");
+    const turnStartParams = turnStart?.[1] as
+      | { approvalPolicy?: { granular?: { mcp_elicitations?: boolean } } }
+      | undefined;
+    expect(turnStartParams?.approvalPolicy?.granular?.mcp_elicitations).toBe(true);
 
     await notify({
       method: "turn/completed",
@@ -3073,20 +3059,11 @@ describe("runCodexAppServerAttempt", () => {
     await completeTurn({ threadId: "thread-1", turnId: "turn-1" });
     await run;
 
-    expect(requests).toEqual(
-      expect.arrayContaining([
-        {
-          method: "thread/start",
-          params: expect.objectContaining({
-            config: expect.objectContaining({
-              apps: expect.objectContaining({
-                "google-calendar-app": expect.objectContaining({ enabled: true }),
-              }),
-            }),
-          }),
-        },
-      ]),
-    );
+    const threadStart = requests.find((entry) => entry.method === "thread/start");
+    const threadStartParams = threadStart?.params as
+      | { config?: { apps?: Record<string, { enabled?: boolean }> } }
+      | undefined;
+    expect(threadStartParams?.config?.apps?.["google-calendar-app"]?.enabled).toBe(true);
     expect(requests.map((entry) => entry.method)).not.toContain("app/list");
   });
 
@@ -3232,20 +3209,11 @@ describe("runCodexAppServerAttempt", () => {
     await run;
 
     expect(requests.map((entry) => entry.method)).toContain("app/list");
-    expect(requests).toEqual(
-      expect.arrayContaining([
-        {
-          method: "thread/start",
-          params: expect.objectContaining({
-            config: expect.objectContaining({
-              apps: expect.objectContaining({
-                "google-calendar-app": expect.objectContaining({ enabled: true }),
-              }),
-            }),
-          }),
-        },
-      ]),
-    );
+    const threadStart = requests.find((entry) => entry.method === "thread/start");
+    const threadStartParams = threadStart?.params as
+      | { config?: { apps?: Record<string, { enabled?: boolean }> } }
+      | undefined;
+    expect(threadStartParams?.config?.apps?.["google-calendar-app"]?.enabled).toBe(true);
   });
 
   it("times out app-server startup before thread setup can hang forever", async () => {
@@ -3459,10 +3427,9 @@ describe("runCodexAppServerAttempt", () => {
       appServer,
     });
 
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      dynamicToolsFingerprint: fingerprint,
-      threadId: "thread-1",
-    });
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.dynamicToolsFingerprint).toBe(fingerprint);
+    expect(binding?.threadId).toBe("thread-1");
     expect(request.mock.calls.map(([method]) => method)).toEqual([
       "thread/start",
       "thread/start",
@@ -3493,9 +3460,8 @@ describe("runCodexAppServerAttempt", () => {
     ).rejects.toThrow("codex app-server client is closed");
 
     expect(request.mock.calls.map(([method]) => method)).toEqual(["thread/resume"]);
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      threadId: "thread-existing",
-    });
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.threadId).toBe("thread-existing");
   });
 
   it("restarts the app-server once when a shared client closes during startup", async () => {
@@ -3542,7 +3508,8 @@ describe("runCodexAppServerAttempt", () => {
       },
     });
 
-    await expect(run).resolves.toMatchObject({ aborted: false });
+    const result = await run;
+    expect(result.aborted).toBe(false);
     expect(requests).toEqual([["thread/resume"], ["thread/resume", "turn/start"]]);
   });
 
@@ -3590,7 +3557,8 @@ describe("runCodexAppServerAttempt", () => {
       },
     });
 
-    await expect(run).resolves.toMatchObject({ aborted: false });
+    const result = await run;
+    expect(result.aborted).toBe(false);
     expect(requests).toEqual([
       ["thread/resume"],
       ["thread/resume"],
@@ -3634,20 +3602,10 @@ describe("runCodexAppServerAttempt", () => {
       config,
     });
 
-    expect(request.mock.calls).toEqual([
-      [
-        "thread/start",
-        expect.objectContaining({
-          config,
-        }),
-      ],
-      [
-        "thread/resume",
-        expect.objectContaining({
-          config,
-        }),
-      ],
-    ]);
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/start", "thread/resume"]);
+    expect(requestCalls[0]?.[1].config).toEqual(config);
+    expect(requestCalls[1]?.[1].config).toEqual(config);
   });
 
   it("merges native hook relay config with plugin app config when starting a thread", async () => {
@@ -3687,24 +3645,18 @@ describe("runCodexAppServerAttempt", () => {
     });
 
     expect(buildPluginThreadConfig).toHaveBeenCalledTimes(1);
-    expect(request.mock.calls).toEqual([
-      [
-        "thread/start",
-        expect.objectContaining({
-          config: {
-            "features.codex_hooks": true,
-            hooks: { PreToolUse: [] },
-            ...createPluginAppConfigPatch(),
-          },
-        }),
-      ],
-    ]);
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      threadId: "thread-plugins",
-      pluginAppsFingerprint: "plugin-apps-config-1",
-      pluginAppsInputFingerprint: "plugin-apps-input-1",
-      pluginAppPolicyContext,
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/start"]);
+    expect(requestCalls[0]?.[1].config).toEqual({
+      "features.codex_hooks": true,
+      hooks: { PreToolUse: [] },
+      ...createPluginAppConfigPatch(),
     });
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.threadId).toBe("thread-plugins");
+    expect(binding?.pluginAppsFingerprint).toBe("plugin-apps-config-1");
+    expect(binding?.pluginAppsInputFingerprint).toBe("plugin-apps-input-1");
+    expect(binding?.pluginAppPolicyContext).toEqual(pluginAppPolicyContext);
   });
 
   it("revalidates compatible plugin app bindings without resending app config", async () => {
@@ -3758,23 +3710,13 @@ describe("runCodexAppServerAttempt", () => {
 
     expect(binding.pluginAppPolicyContext).toEqual(pluginAppPolicyContext);
     expect(buildPluginThreadConfig).toHaveBeenCalledTimes(2);
-    expect(request.mock.calls).toEqual([
-      [
-        "thread/start",
-        expect.objectContaining({
-          config: {
-            "features.codex_hooks": true,
-            ...createPluginAppConfigPatch(),
-          },
-        }),
-      ],
-      [
-        "thread/resume",
-        expect.objectContaining({
-          config: { "features.codex_hooks": true },
-        }),
-      ],
-    ]);
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/start", "thread/resume"]);
+    expect(requestCalls[0]?.[1].config).toEqual({
+      "features.codex_hooks": true,
+      ...createPluginAppConfigPatch(),
+    });
+    expect(requestCalls[1]?.[1].config).toEqual({ "features.codex_hooks": true });
   });
 
   it("starts a new plugin app thread when full binding revalidation removes an app", async () => {
@@ -3827,27 +3769,21 @@ describe("runCodexAppServerAttempt", () => {
     });
 
     expect(buildPluginThreadConfig).toHaveBeenCalledTimes(1);
-    expect(request.mock.calls).toEqual([
-      [
-        "thread/start",
-        expect.objectContaining({
-          config: {
-            apps: {
-              _default: {
-                enabled: false,
-                destructive_enabled: false,
-                open_world_enabled: false,
-              },
-            },
-          },
-        }),
-      ],
-    ]);
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      threadId: "thread-revalidated",
-      pluginAppsFingerprint: "plugin-apps-empty",
-      pluginAppPolicyContext: emptyPolicyContext,
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/start"]);
+    expect(requestCalls[0]?.[1].config).toEqual({
+      apps: {
+        _default: {
+          enabled: false,
+          destructive_enabled: false,
+          open_world_enabled: false,
+        },
+      },
     });
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.threadId).toBe("thread-revalidated");
+    expect(binding?.pluginAppsFingerprint).toBe("plugin-apps-empty");
+    expect(binding?.pluginAppPolicyContext).toEqual(emptyPolicyContext);
   });
 
   it("keeps the existing plugin app binding when revalidation fails", async () => {
@@ -3885,15 +3821,14 @@ describe("runCodexAppServerAttempt", () => {
       },
     });
 
-    expect(request.mock.calls).toEqual([
-      ["thread/resume", expect.not.objectContaining({ config: expect.anything() })],
-    ]);
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      threadId: "thread-existing",
-      pluginAppsFingerprint: "plugin-apps-config-1",
-      pluginAppsInputFingerprint: "plugin-apps-input-1",
-      pluginAppPolicyContext,
-    });
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/resume"]);
+    expect("config" in (requestCalls[0]?.[1] ?? {})).toBe(false);
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.threadId).toBe("thread-existing");
+    expect(binding?.pluginAppsFingerprint).toBe("plugin-apps-config-1");
+    expect(binding?.pluginAppsInputFingerprint).toBe("plugin-apps-input-1");
+    expect(binding?.pluginAppPolicyContext).toEqual(pluginAppPolicyContext);
   });
 
   it("rebuilds an empty plugin app binding after app inventory recovers", async () => {
@@ -3937,19 +3872,13 @@ describe("runCodexAppServerAttempt", () => {
     });
 
     expect(buildPluginThreadConfig).toHaveBeenCalledTimes(1);
-    expect(request.mock.calls).toEqual([
-      [
-        "thread/start",
-        expect.objectContaining({
-          config: createPluginAppConfigPatch(),
-        }),
-      ],
-    ]);
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      threadId: "thread-recovered",
-      pluginAppsFingerprint: "plugin-apps-config-1",
-      pluginAppPolicyContext,
-    });
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/start"]);
+    expect(requestCalls[0]?.[1].config).toEqual(createPluginAppConfigPatch());
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.threadId).toBe("thread-recovered");
+    expect(binding?.pluginAppsFingerprint).toBe("plugin-apps-config-1");
+    expect(binding?.pluginAppPolicyContext).toEqual(pluginAppPolicyContext);
   });
 
   it("keeps an empty plugin app binding when recovery still produces the same config", async () => {
@@ -4001,9 +3930,9 @@ describe("runCodexAppServerAttempt", () => {
     });
 
     expect(buildPluginThreadConfig).toHaveBeenCalledTimes(1);
-    expect(request.mock.calls).toEqual([
-      ["thread/resume", expect.not.objectContaining({ config: expect.anything() })],
-    ]);
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/resume"]);
+    expect("config" in (requestCalls[0]?.[1] ?? {})).toBe(false);
   });
 
   it("rebuilds a partial plugin app binding after another plugin recovers", async () => {
@@ -4048,19 +3977,13 @@ describe("runCodexAppServerAttempt", () => {
     });
 
     expect(buildPluginThreadConfig).toHaveBeenCalledTimes(1);
-    expect(request.mock.calls).toEqual([
-      [
-        "thread/start",
-        expect.objectContaining({
-          config: createTwoPluginAppConfigPatch(),
-        }),
-      ],
-    ]);
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      threadId: "thread-recovered",
-      pluginAppsFingerprint: "plugin-apps-config-2",
-      pluginAppPolicyContext: recoveredPolicyContext,
-    });
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/start"]);
+    expect(requestCalls[0]?.[1].config).toEqual(createTwoPluginAppConfigPatch());
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.threadId).toBe("thread-recovered");
+    expect(binding?.pluginAppsFingerprint).toBe("plugin-apps-config-2");
+    expect(binding?.pluginAppPolicyContext).toEqual(recoveredPolicyContext);
   });
 
   it("rebuilds a partial plugin app binding after another app from the same plugin recovers", async () => {
@@ -4110,19 +4033,13 @@ describe("runCodexAppServerAttempt", () => {
     });
 
     expect(buildPluginThreadConfig).toHaveBeenCalledTimes(1);
-    expect(request.mock.calls).toEqual([
-      [
-        "thread/start",
-        expect.objectContaining({
-          config: createTwoCalendarAppConfigPatch(),
-        }),
-      ],
-    ]);
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      threadId: "thread-recovered",
-      pluginAppsFingerprint: "plugin-apps-config-calendar-2",
-      pluginAppPolicyContext: recoveredPolicyContext,
-    });
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/start"]);
+    expect(requestCalls[0]?.[1].config).toEqual(createTwoCalendarAppConfigPatch());
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.threadId).toBe("thread-recovered");
+    expect(binding?.pluginAppsFingerprint).toBe("plugin-apps-config-calendar-2");
+    expect(binding?.pluginAppPolicyContext).toEqual(recoveredPolicyContext);
   });
 
   it("starts a new configured thread for legacy bindings missing plugin app metadata", async () => {
@@ -4159,19 +4076,13 @@ describe("runCodexAppServerAttempt", () => {
       },
     });
 
-    expect(request.mock.calls).toEqual([
-      [
-        "thread/start",
-        expect.objectContaining({
-          config: createPluginAppConfigPatch(),
-        }),
-      ],
-    ]);
-    await expect(readCodexAppServerBinding(sessionFile)).resolves.toMatchObject({
-      threadId: "thread-plugins",
-      pluginAppsFingerprint: "plugin-apps-config-1",
-      pluginAppPolicyContext,
-    });
+    const requestCalls = request.mock.calls as unknown as Array<[string, { config?: unknown }]>;
+    expect(requestCalls.map(([method]) => method)).toEqual(["thread/start"]);
+    expect(requestCalls[0]?.[1].config).toEqual(createPluginAppConfigPatch());
+    const binding = await readCodexAppServerBinding(sessionFile);
+    expect(binding?.threadId).toBe("thread-plugins");
+    expect(binding?.pluginAppsFingerprint).toBe("plugin-apps-config-1");
+    expect(binding?.pluginAppPolicyContext).toEqual(pluginAppPolicyContext);
   });
 
   it("starts a new Codex thread when dynamic tool schemas change", async () => {
@@ -4236,20 +4147,13 @@ describe("runCodexAppServerAttempt", () => {
       developerInstructions: expect.stringContaining(CODEX_GPT5_BEHAVIOR_CONTRACT),
       persistExtendedHistory: true,
     });
-    expect(requests).toEqual(
-      expect.arrayContaining([
-        {
-          method: "turn/start",
-          params: expect.objectContaining({
-            approvalPolicy: "on-request",
-            approvalsReviewer: "guardian_subagent",
-            sandboxPolicy: { type: "dangerFullAccess" },
-            serviceTier: "priority",
-            model: "gpt-5.4-codex",
-          }),
-        },
-      ]),
-    );
+    const turnRequest = requests.find((request) => request.method === "turn/start");
+    const turnRequestParams = turnRequest?.params as Record<string, unknown> | undefined;
+    expect(turnRequestParams?.approvalPolicy).toBe("on-request");
+    expect(turnRequestParams?.approvalsReviewer).toBe("guardian_subagent");
+    expect(turnRequestParams?.sandboxPolicy).toEqual({ type: "dangerFullAccess" });
+    expect(turnRequestParams?.serviceTier).toBe("priority");
+    expect(turnRequestParams?.model).toBe("gpt-5.4-codex");
   });
 
   it("passes current Codex service tier request values through app-server resume and turn requests", async () => {
@@ -4272,9 +4176,11 @@ describe("runCodexAppServerAttempt", () => {
     await run;
 
     const resumeRequest = requests.find((request) => request.method === "thread/resume");
-    expect(resumeRequest?.params).toEqual(expect.objectContaining({ serviceTier: "priority" }));
+    const resumeRequestParams = resumeRequest?.params as Record<string, unknown> | undefined;
+    expect(resumeRequestParams?.serviceTier).toBe("priority");
     const turnRequest = requests.find((request) => request.method === "turn/start");
-    expect(turnRequest?.params).toEqual(expect.objectContaining({ serviceTier: "priority" }));
+    const turnRequestParams = turnRequest?.params as Record<string, unknown> | undefined;
+    expect(turnRequestParams?.serviceTier).toBe("priority");
   });
 
   it("keys plugin app inventory by websocket credentials without exposing them", () => {
@@ -4343,27 +4249,26 @@ describe("runCodexAppServerAttempt", () => {
       developerInstructions: expect.stringContaining(CODEX_GPT5_BEHAVIOR_CONTRACT),
       persistExtendedHistory: true,
     });
-    expect(
-      buildTurnStartParams(params, { threadId: "thread-1", cwd: "/tmp/workspace", appServer }),
-    ).toEqual(
-      expect.objectContaining({
-        threadId: "thread-1",
-        cwd: "/tmp/workspace",
+    const turnParams = buildTurnStartParams(params, {
+      threadId: "thread-1",
+      cwd: "/tmp/workspace",
+      appServer,
+    });
+    expect(turnParams.threadId).toBe("thread-1");
+    expect(turnParams.cwd).toBe("/tmp/workspace");
+    expect(turnParams.model).toBe("gpt-5.4-codex");
+    expect(turnParams.approvalPolicy).toBe("on-request");
+    expect(turnParams.approvalsReviewer).toBe("guardian_subagent");
+    expect(turnParams.sandboxPolicy).toEqual({ type: "dangerFullAccess" });
+    expect(turnParams.serviceTier).toBe("flex");
+    expect(turnParams.collaborationMode).toEqual({
+      mode: "default",
+      settings: {
         model: "gpt-5.4-codex",
-        approvalPolicy: "on-request",
-        approvalsReviewer: "guardian_subagent",
-        sandboxPolicy: { type: "dangerFullAccess" },
-        serviceTier: "flex",
-        collaborationMode: {
-          mode: "default",
-          settings: {
-            model: "gpt-5.4-codex",
-            reasoning_effort: "medium",
-            developer_instructions: null,
-          },
-        },
-      }),
-    );
+        reasoning_effort: "medium",
+        developer_instructions: null,
+      },
+    });
   });
 
   it("uses turn-scoped collaboration instructions for heartbeat Codex turns", () => {
