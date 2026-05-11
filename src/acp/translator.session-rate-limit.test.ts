@@ -139,9 +139,11 @@ function configOptions(value: unknown) {
 
 function expectConfigOption(options: unknown, id: string, fields: Record<string, unknown>) {
   const option = configOptions(options).find((candidate) => candidate.id === id);
-  expect(option, `config option ${id}`).toBeDefined();
+  if (!option) {
+    throw new Error(`Expected config option ${id}`);
+  }
   for (const [field, value] of Object.entries(fields)) {
-    expect(option?.[field]).toEqual(value);
+    expect(option[field]).toEqual(value);
   }
 }
 
@@ -260,7 +262,14 @@ describe("acp session UX bridge behavior", () => {
     const result = await agent.newSession(createNewSessionRequest());
 
     expect(result.modes?.currentModeId).toBe("adaptive");
-    expect(result.modes?.availableModes.map((mode) => mode.id)).toContain("adaptive");
+    expect(result.modes?.availableModes.map((mode) => mode.id)).toStrictEqual([
+      "off",
+      "minimal",
+      "low",
+      "medium",
+      "high",
+      "adaptive",
+    ]);
     expectConfigOption(result.configOptions, "thought_level", {
       currentValue: "adaptive",
       category: "thought_level",
@@ -379,6 +388,10 @@ describe("acp session UX bridge behavior", () => {
         sessionUpdate: "session_info_update",
         title: "Fix ACP bridge",
         updatedAt: "2024-03-09T16:00:00.000Z",
+        _meta: {
+          sessionKey: "agent:main:work",
+          kind: "direct",
+        },
       },
     });
     expect(sessionUpdate).toHaveBeenCalledWith({
@@ -952,6 +965,10 @@ describe("acp session metadata and usage updates", () => {
         sessionUpdate: "session_info_update",
         title: "Usage session",
         updatedAt: "2024-03-09T16:02:03.000Z",
+        _meta: {
+          sessionKey: "usage-session",
+          kind: "direct",
+        },
       },
     });
     expect(sessionUpdate).toHaveBeenCalledWith({

@@ -300,7 +300,9 @@ describe("dispatchTelegramMessage draft streaming", () => {
   }
 
   function expectRecordFields(record: unknown, expected: Record<string, unknown>) {
-    expect(record).toBeDefined();
+    if (!record || typeof record !== "object") {
+      throw new Error("Expected record");
+    }
     const actual = record as Record<string, unknown>;
     for (const [key, value] of Object.entries(expected)) {
       expect(actual[key]).toEqual(value);
@@ -327,8 +329,10 @@ describe("dispatchTelegramMessage draft streaming", () => {
   function expectDeliveredReply(index: number, expected: Record<string, unknown>, callIndex = 0) {
     const params = expectDeliverRepliesParams({}, callIndex);
     const replies = params.replies as Array<unknown> | undefined;
-    expect(replies).toBeDefined();
-    return expectRecordFields(replies?.[index], expected);
+    if (!Array.isArray(replies)) {
+      throw new Error("Expected delivered replies array");
+    }
+    return expectRecordFields(replies[index], expected);
   }
 
   function expectDispatchParams(expected: Record<string, unknown>) {
