@@ -15,6 +15,7 @@ import type { ChatCompletionChunk } from "openai/resources/chat/completions.js";
 import type {
   FunctionTool,
   ResponseCreateParamsStreaming,
+  ResponseFormatTextConfig,
   ResponseFunctionCallOutputItemList,
   ResponseInput,
   ResponseInputItem,
@@ -67,7 +68,7 @@ import { stripSystemPromptCacheBoundary } from "./system-prompt-cache-boundary.j
 import { transformTransportMessages } from "./transport-message-transform.js";
 import { mergeTransportMetadata, sanitizeTransportPayloadText } from "./transport-stream-shared.js";
 
-const DEFAULT_AZURE_OPENAI_API_VERSION = "2024-12-01-preview";
+const DEFAULT_AZURE_OPENAI_API_VERSION = "preview";
 const OPENAI_CODEX_RESPONSES_EMPTY_INPUT_TEXT = " ";
 const GEMINI_THOUGHT_SIGNATURE_VALIDATOR_SKIP = "skip_thought_signature_validator";
 const AZURE_RESPONSES_FIRST_EVENT_TIMEOUT_MS = 30_000;
@@ -87,6 +88,7 @@ type BaseStreamOptions = {
   onPayload?: (payload: unknown, model: Model<Api>) => unknown;
   headers?: Record<string, string>;
   openclawCodeModeToolSurface?: boolean;
+  responseFormat?: Record<string, unknown>;
 };
 
 type OpenAIResponsesOptions = BaseStreamOptions & {
@@ -1272,6 +1274,20 @@ const OPENAI_CODEX_RESPONSES_UNSUPPORTED_PARAMS = [
   "top_p",
 ] as const;
 
+function stripOpenAICodexResponsesUnsupportedTextFields(params: Record<string, unknown>): void {
+  const text = params.text;
+  if (!text || typeof text !== "object" || Array.isArray(text)) {
+    return;
+  }
+  const sanitizedText = { ...(text as Record<string, unknown>) };
+  delete sanitizedText.format;
+  if (Object.keys(sanitizedText).length > 0) {
+    params.text = sanitizedText;
+  } else {
+    delete params.text;
+  }
+}
+
 function sanitizeOpenAICodexResponsesParams<T extends Record<string, unknown>>(
   model: Model<Api>,
   params: T,
@@ -1282,6 +1298,7 @@ function sanitizeOpenAICodexResponsesParams<T extends Record<string, unknown>>(
   for (const key of OPENAI_CODEX_RESPONSES_UNSUPPORTED_PARAMS) {
     delete params[key];
   }
+  stripOpenAICodexResponsesUnsupportedTextFields(params);
   return params;
 }
 
@@ -1306,6 +1323,23 @@ function ensureOpenAICodexResponsesInput(messages: ResponseInput, context: Conte
     role: "user",
     content: [{ type: "input_text", text: OPENAI_CODEX_RESPONSES_EMPTY_INPUT_TEXT }],
   });
+}
+
+function resolveOpenAIResponsesTextFormat(
+  responseFormat: Record<string, unknown>,
+): ResponseFormatTextConfig {
+  if (
+    responseFormat.type === "json_schema" &&
+    responseFormat.json_schema &&
+    typeof responseFormat.json_schema === "object" &&
+    !Array.isArray(responseFormat.json_schema)
+  ) {
+    return {
+      ...(responseFormat.json_schema as Record<string, unknown>),
+      type: "json_schema",
+    } as unknown as ResponseFormatTextConfig;
+  }
+  return responseFormat as unknown as ResponseFormatTextConfig;
 }
 
 export function buildOpenAIResponsesParams(
@@ -1355,6 +1389,12 @@ export function buildOpenAIResponsesParams(
   }
   if (options?.topP !== undefined) {
     params.top_p = options.topP;
+  }
+  if (options?.responseFormat !== undefined) {
+    params.text = {
+      ...params.text,
+      format: resolveOpenAIResponsesTextFormat(options.responseFormat),
+    };
   }
   if (options?.serviceTier !== undefined && payloadPolicy.allowsServiceTier) {
     params.service_tier = options.serviceTier;
@@ -2190,6 +2230,7 @@ type OpenAIResponsesRequestParams = {
   max_output_tokens?: number;
   temperature?: number;
   top_p?: number;
+  text?: ResponseCreateParamsStreaming["text"];
   service_tier?: ResponseCreateParamsStreaming["service_tier"];
   tools?: FunctionTool[];
   tool_choice?: ResponseCreateParamsStreaming["tool_choice"];
@@ -2376,6 +2417,80 @@ function injectToolCallThoughtSignatures(
   }
 }
 
+const COMPLETIONS_REASONING_REPLAY_FIELDS = [
+  "reasoning_details",
+  "reasoning_content",
+  "reasoning",
+  "reasoning_text",
+] as const;
+
+function stripCompletionsReasoningReplayFields(record: Record<string, unknown>): void {
+  for (const field of COMPLETIONS_REASONING_REPLAY_FIELDS) {
+    if (field in record) {
+      delete record[field];
+    }
+  }
+}
+
+function sanitizeOpenRouterReasoningReplayFields(record: Record<string, unknown>): void {
+  const reasoningDetails = record.reasoning_details;
+  if (typeof reasoningDetails === "string") {
+    if (reasoningDetails.length > 0 && typeof record.reasoning !== "string") {
+      record.reasoning = reasoningDetails;
+    }
+    delete record.reasoning_details;
+  } else if (reasoningDetails !== undefined && !Array.isArray(reasoningDetails)) {
+    delete record.reasoning_details;
+  }
+
+  if ("reasoning" in record && typeof record.reasoning !== "string") {
+    delete record.reasoning;
+  }
+  if ("reasoning_content" in record && typeof record.reasoning_content !== "string") {
+    delete record.reasoning_content;
+  }
+
+  const reasoningText = record.reasoning_text;
+  if (
+    typeof reasoningText === "string" &&
+    reasoningText.length > 0 &&
+    typeof record.reasoning !== "string" &&
+    typeof record.reasoning_content !== "string"
+  ) {
+    record.reasoning = reasoningText;
+  }
+  if ("reasoning_text" in record) {
+    delete record.reasoning_text;
+  }
+}
+
+// OpenAI Chat Completions assistant-message input does not define reasoning
+// replay fields, while OpenRouter documents a compatible pass-back contract.
+// Keep OpenRouter's valid shapes, but normalize leaked string reasoning_details
+// from pi-ai thinking signatures before a follow-up request hits the wire.
+function sanitizeCompletionsReasoningReplayFields(
+  messages: unknown,
+  options: { preserveOpenRouterReasoning: boolean },
+): void {
+  if (!Array.isArray(messages)) {
+    return;
+  }
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") {
+      continue;
+    }
+    const record = msg as Record<string, unknown>;
+    if (record.role !== "assistant") {
+      continue;
+    }
+    if (options.preserveOpenRouterReasoning) {
+      sanitizeOpenRouterReasoningReplayFields(record);
+    } else {
+      stripCompletionsReasoningReplayFields(record);
+    }
+  }
+}
+
 export function buildOpenAICompletionsParams(
   model: OpenAIModeModel,
   context: Context,
@@ -2391,6 +2506,9 @@ export function buildOpenAICompletionsParams(
     : context;
   let messages = convertMessages(model as never, completionsContext, compat as never);
   injectToolCallThoughtSignatures(messages as unknown[], context, model);
+  sanitizeCompletionsReasoningReplayFields(messages, {
+    preserveOpenRouterReasoning: compat.thinkingFormat === "openrouter",
+  });
   if (compat.strictMessageKeys) {
     messages = stripCompletionMessagesToRoleContent(messages) as typeof messages;
   }
@@ -2424,6 +2542,9 @@ export function buildOpenAICompletionsParams(
   }
   if (options?.topP !== undefined) {
     params.top_p = options.topP;
+  }
+  if (options?.responseFormat !== undefined) {
+    params.response_format = options.responseFormat;
   }
   if (context.tools) {
     params.tools = convertTools(context.tools, compat, model);
