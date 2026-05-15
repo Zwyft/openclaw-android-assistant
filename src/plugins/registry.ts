@@ -15,6 +15,7 @@ import {
   clearContextEnginesForOwner,
   registerContextEngineForOwner,
 } from "../context-engine/registry.js";
+import { createPluginGatewayMethodDescriptor } from "../gateway/methods/registry.js";
 import { isOperatorScope, type OperatorScope } from "../gateway/operator-scopes.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import { registerInternalHook, unregisterInternalHook } from "../hooks/internal-hooks.js";
@@ -715,12 +716,14 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
         message: `gateway method scope coerced to operator.admin for reserved core namespace: ${trimmed}`,
       });
     }
-    const effectiveScope = normalizedScope.scope;
-    if (effectiveScope) {
-      registry.gatewayMethodScopes ??= {};
-      registry.gatewayMethodScopes[trimmed] = effectiveScope;
-    }
-    record.gatewayMethods.push(trimmed);
+    registry.gatewayMethodDescriptors.push(
+      createPluginGatewayMethodDescriptor({
+        pluginId: record.id,
+        name: trimmed,
+        handler,
+        scope: normalizedScope.scope,
+      }),
+    );
   };
 
   const describeHttpRouteOwner = (entry: PluginHttpRouteRegistration): string => {
