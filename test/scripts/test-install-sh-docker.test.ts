@@ -126,6 +126,8 @@ describe("test-install-sh-docker", () => {
 
     expect(script).toContain('DOCKER_PULL_TIMEOUT="${OPENCLAW_DOCKER_SETUP_PULL_TIMEOUT:-600s}"');
     expect(script).toContain("run_docker_pull()");
+    expect(script).toContain("timeout --kill-after=1s 1s true");
+    expect(script).toContain('timeout --kill-after=30s "$DOCKER_PULL_TIMEOUT" docker pull "$image"');
     expect(script).toContain('timeout "$DOCKER_PULL_TIMEOUT" docker pull "$image"');
     expect(script).toContain('run_docker_pull "$IMAGE_NAME"');
     expect(script).not.toContain('docker pull "$IMAGE_NAME"');
@@ -138,9 +140,25 @@ describe("test-install-sh-docker", () => {
       'PODMAN_PULL_TIMEOUT="${OPENCLAW_PODMAN_SETUP_PULL_TIMEOUT:-600s}"',
     );
     expect(script).toContain("run_podman_pull()");
+    expect(script).toContain("timeout --kill-after=1s 1s true");
+    expect(script).toContain('timeout --kill-after=30s "$PODMAN_PULL_TIMEOUT" podman pull "$image"');
     expect(script).toContain('timeout "$PODMAN_PULL_TIMEOUT" podman pull "$image"');
     expect(script).toContain('run_podman_pull "$OPENCLAW_IMAGE"');
     expect(script).not.toContain('podman pull "$OPENCLAW_IMAGE"');
+  });
+
+  it("bounds Podman setup image builds", () => {
+    const script = readFileSync(PODMAN_SETUP_PATH, "utf8");
+
+    expect(script).toContain(
+      'PODMAN_BUILD_TIMEOUT="${OPENCLAW_PODMAN_SETUP_BUILD_TIMEOUT:-1800s}"',
+    );
+    expect(script).toContain("run_podman_build()");
+    expect(script).toContain("timeout --kill-after=1s 1s true");
+    expect(script).toContain('timeout --kill-after=30s "$PODMAN_BUILD_TIMEOUT" podman build "$@"');
+    expect(script).toContain('timeout "$PODMAN_BUILD_TIMEOUT" podman build "$@"');
+    expect(script).toContain('run_podman_build -t "$OPENCLAW_IMAGE"');
+    expect(script).not.toContain('podman build -t "$OPENCLAW_IMAGE"');
   });
 
   it("bounds detached Podman launches without timing out onboarding", () => {
@@ -149,6 +167,8 @@ describe("test-install-sh-docker", () => {
     expect(script).toContain('PODMAN_RUN_TIMEOUT="${OPENCLAW_PODMAN_RUN_TIMEOUT:-600s}"');
     expect(script).toContain("OPENCLAW_PODMAN_RUN_TIMEOUT|OPENCLAW_PODMAN_GATEWAY_HOST_PORT");
     expect(script).toContain("run_podman_detached()");
+    expect(script).toContain("timeout --kill-after=1s 1s true");
+    expect(script).toContain('timeout --kill-after=30s "$PODMAN_RUN_TIMEOUT" podman run "$@"');
     expect(script).toContain('timeout "$PODMAN_RUN_TIMEOUT" podman run "$@"');
     expect(script).toContain('podman run --pull="$PODMAN_PULL" --rm -it \\');
     expect(script).toContain('run_podman_detached --pull="$PODMAN_PULL" -d --replace \\');
@@ -245,7 +265,7 @@ describe("install-sh smoke runner", () => {
     );
     expect(script).toContain("run_with_heartbeat");
     expect(script).toContain("npm_install_global");
-    expect(script).toContain('timeout --foreground "${INSTALL_COMMAND_TIMEOUT}s"');
+    expect(script).toContain('timeout --kill-after=30s "${INSTALL_COMMAND_TIMEOUT}s"');
     expect(script).toContain("==> Still running");
     expect(script).toContain("print_install_audit");
     expect(script).toContain('install -g "$@"');
@@ -372,10 +392,12 @@ describe("bun global install smoke", () => {
     expect(workflow).toContain("install-smoke-fast:");
     expect(workflow).toContain("run_fast_install_smoke");
     expect(workflow).toContain("run_full_install_smoke");
-    expect(workflow).toContain("timeout 45m docker buildx build");
-    expect(workflow).toContain('timeout 600s docker pull "$IMAGE_REF"');
+    expect(workflow).toContain("timeout --kill-after=30s 45m docker buildx build");
+    expect(workflow).toContain('timeout --kill-after=30s 600s docker pull "$IMAGE_REF"');
     expect(workflow).not.toContain('timeout 300s docker pull "$IMAGE_REF"');
-    expect(workflow.match(/timeout 20m docker run --rm/g)?.length).toBe(6);
+    expect(workflow.match(/timeout --kill-after=30s 20m docker run --rm/g)?.length).toBe(
+      6,
+    );
     expect(workflow).not.toMatch(/(^|\n)\s+docker run --rm --entrypoint sh/u);
     expect(workflow).toContain("--progress=plain");
     expect(workflow).toContain("--load");
