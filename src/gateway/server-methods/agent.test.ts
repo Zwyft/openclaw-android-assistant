@@ -526,6 +526,86 @@ describe("gateway agent handler", () => {
     resetExecApprovalFollowupRuntimeHandoffsForTests();
   });
 
+  it("passes resolved maintenance config to the gateway admission store write", async () => {
+    primeMainAgentRun({
+      cfg: {
+        session: {
+          maintenance: {
+            mode: "enforce",
+            maxEntries: 42,
+          },
+        },
+      },
+    });
+
+    await runMainAgent("hi", "idem-maintenance-config");
+
+    const updateOptions = mocks.updateSessionStore.mock.calls.at(-1)?.[2];
+    expect(updateOptions).toMatchObject({
+      takeCacheOwnership: true,
+      maintenanceConfig: {
+        mode: "enforce",
+        maxEntries: 42,
+      },
+    });
+  });
+
+  it("uses single-entry persistence for ordinary gateway admission touches", async () => {
+    mockMainSessionEntry({});
+    let capturedOptions:
+      | {
+          resolveSingleEntryPersistence?: (result: unknown) => unknown;
+        }
+      | undefined;
+    let persistedResult: unknown;
+    mocks.updateSessionStore.mockImplementation(async (_path, updater, opts) => {
+      const store: Record<string, Record<string, unknown>> = {
+        "agent:main:main": buildExistingMainStoreEntry(),
+      };
+      persistedResult = await updater(store);
+      capturedOptions = opts;
+      return persistedResult;
+    });
+    mocks.agentCommand.mockResolvedValue({
+      payloads: [{ text: "ok" }],
+      meta: { durationMs: 100 },
+    });
+
+    await runMainAgent("hi", "idem-single-entry-persist");
+
+    expect(capturedOptions?.resolveSingleEntryPersistence?.(persistedResult)).toMatchObject({
+      sessionKey: "agent:main:main",
+      entry: persistedResult,
+    });
+  });
+
+  it("disables single-entry persistence when admission prunes legacy store keys", async () => {
+    mockMainSessionEntry({});
+    let capturedOptions:
+      | {
+          resolveSingleEntryPersistence?: (result: unknown) => unknown;
+        }
+      | undefined;
+    let persistedResult: unknown;
+    mocks.updateSessionStore.mockImplementation(async (_path, updater, opts) => {
+      const store: Record<string, Record<string, unknown>> = {
+        "agent:main:main": buildExistingMainStoreEntry({ updatedAt: 100 }),
+        "Agent:main:main": buildExistingMainStoreEntry({ updatedAt: 50 }),
+      };
+      persistedResult = await updater(store);
+      capturedOptions = opts;
+      return persistedResult;
+    });
+    mocks.agentCommand.mockResolvedValue({
+      payloads: [{ text: "ok" }],
+      meta: { durationMs: 100 },
+    });
+
+    await runMainAgent("hi", "idem-single-entry-legacy-prune");
+
+    expect(capturedOptions?.resolveSingleEntryPersistence?.(persistedResult)).toBeUndefined();
+  });
+
   it("preserves ACP metadata from the current stored session entry", async () => {
     const existingAcpMeta = {
       backend: "acpx",
