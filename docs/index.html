@@ -773,6 +773,23 @@ bash scripts/build-server-bundle.sh && ./gradlew assembleDebug \
     <li>Performance: trust install-record caches between reloads, prefer native JSON parsing, reuse unchanged tool-search catalogs, reuse gateway session and plugin metadata paths, skip unchanged store serialization, patch single-entry session writes, add precomputed session patch writers, reduce store clone allocations, cache manifest model catalog rows and auto-enabled plugin config, avoid full session snapshots for entry reads, defer configured Slack full startup, prefer bundled plugin dist entries, and slim current metadata identity caches</li>
     <li>Docker/release/QA: package runtime workspace templates, stream cross-OS served artifacts, preserve sparse Crabbox run artifacts, isolate npm plugin installs per package, reject incompatible package plugin API installs, drop the leftover root Sharp dependency from package manifests after the Rastermill migration, bound OpenClaw instance logs, plugin gauntlet relay logs, MCP channel buffers, kitchen-sink scans, agent-turn assertions, QA-Lab credential broker calls, QA Matrix substrate requests, and release scenario logs, and keep release/google live guards current. (#87647, #87477) and @vincentkoc</li>
     <li>Release/CI: bound manual git fetches, ClawHub verifier responses, ClawHub owner metadata, dependency-guard error bodies, Parallels limits, startup/test/memory budget parsing, and diffs viewer build warnings so release lanes fail with useful proof instead of hanging</li>
+    <li>npm package: https://www.npmjs.com/package/openclaw/v/2026.5.28</li>
+    <li>registry tarball: https://registry.npmjs.org/openclaw/-/openclaw-2026.5.28.tgz</li>
+    <li>integrity: `sha512-p7jGN9wzCrqEvHNI6Y7+eh6DWoYDzJ1iQGKTm8xqQ2uQ9/2mY1CCf87WoZeb0+m3eHKSGchlI3tN33fE1lMtEA==`</li>
+    <li>npm preflight: https://github.com/openclaw/openclaw/actions/runs/26692293231</li>
+    <li>full release validation: https://github.com/openclaw/openclaw/actions/runs/26692292739</li>
+    <li>release checks: https://github.com/openclaw/openclaw/actions/runs/26692419552</li>
+    <li>npm Telegram package E2E: https://github.com/openclaw/openclaw/actions/runs/26692496669</li>
+    <li>plugin npm publish: https://github.com/openclaw/openclaw/actions/runs/26693306143</li>
+    <li>plugin ClawHub publish: https://github.com/openclaw/openclaw/actions/runs/26693807853</li>
+    <li>OpenClaw npm publish: https://github.com/openclaw/openclaw/actions/runs/26693561375</li>
+    <li>macOS preflight/sign/notarize: https://github.com/openclaw/releases/actions/runs/26694473893</li>
+    <li>macOS validation: https://github.com/openclaw/releases/actions/runs/26695381614</li>
+    <li>macOS publish/appcast: https://github.com/openclaw/releases/actions/runs/26695523506</li>
+    <li>appcast: https://raw.githubusercontent.com/openclaw/openclaw/main/appcast.xml</li>
+    <li>macOS zip: https://github.com/openclaw/openclaw/releases/download/v2026.5.28/OpenClaw-2026.5.28.zip</li>
+    <li>macOS dmg: https://github.com/openclaw/openclaw/releases/download/v2026.5.28/OpenClaw-2026.5.28.dmg</li>
+    <li>macOS dSYM: https://github.com/openclaw/openclaw/releases/download/v2026.5.28/OpenClaw-2026.5.28.dSYM.zip</li>
     </ul>
   </div>
   <!-- RELEASE_END -->
