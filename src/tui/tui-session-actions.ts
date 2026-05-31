@@ -49,6 +49,46 @@ type SessionInfoEntry = SessionInfo & {
   providerOverride?: string;
 };
 
+function thinkingLevelsEqual(
+  left?: Array<{ id: string; label: string }>,
+  right?: Array<{ id: string; label: string }>,
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right || left.length !== right.length) {
+    return false;
+  }
+  return left.every((level, index) => {
+    const other = right[index];
+    return other?.id === level.id && other.label === level.label;
+  });
+}
+
+function goalEquals(left: SessionInfo["goal"], right: SessionInfo["goal"]): boolean {
+  return left === right || JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function sessionInfoUiEquals(left: SessionInfo, right: SessionInfo): boolean {
+  return (
+    left.thinkingLevel === right.thinkingLevel &&
+    thinkingLevelsEqual(left.thinkingLevels, right.thinkingLevels) &&
+    left.fastMode === right.fastMode &&
+    left.verboseLevel === right.verboseLevel &&
+    left.traceLevel === right.traceLevel &&
+    left.reasoningLevel === right.reasoningLevel &&
+    left.model === right.model &&
+    left.modelProvider === right.modelProvider &&
+    left.contextTokens === right.contextTokens &&
+    left.inputTokens === right.inputTokens &&
+    left.outputTokens === right.outputTokens &&
+    left.totalTokens === right.totalTokens &&
+    left.responseUsage === right.responseUsage &&
+    left.displayName === right.displayName &&
+    goalEquals(left.goal, right.goal)
+  );
+}
+
 export function createSessionActions(context: SessionActionContext) {
   const {
     client,
@@ -69,7 +109,8 @@ export function createSessionActions(context: SessionActionContext) {
     rememberSessionKey,
     emptySessionInfoDefaults,
   } = context;
-  let refreshSessionInfoPromise: Promise<void> = Promise.resolve();
+  let refreshSessionInfoInFlight: Promise<void> | null = null;
+  let refreshSessionInfoQueued = false;
   let lastSessionDefaults: SessionInfoDefaults | null = null;
 
   const applyAgentsResult = (result: TuiAgentsList) => {
@@ -224,10 +265,17 @@ export function createSessionActions(context: SessionActionContext) {
       next.model = selection.model;
     }
 
+    const previous = state.sessionInfo;
+    const uiChanged = !sessionInfoUiEquals(previous, next);
+    if (!uiChanged && previous.updatedAt === next.updatedAt) {
+      return;
+    }
     state.sessionInfo = next;
-    updateAutocompleteProvider();
-    updateFooter();
-    tui.requestRender();
+    if (uiChanged) {
+      updateAutocompleteProvider();
+      updateFooter();
+      tui.requestRender();
+    }
   };
 
   const runRefreshSessionInfo = async () => {
@@ -274,12 +322,25 @@ export function createSessionActions(context: SessionActionContext) {
     }
   };
 
+  const drainRefreshSessionInfo = async () => {
+    do {
+      // Many TUI paths ask for the same session snapshot at once; keep one in-flight
+      // lookup and at most one follow-up so bursts do not queue stale backend calls.
+      refreshSessionInfoQueued = false;
+      await runRefreshSessionInfo();
+    } while (refreshSessionInfoQueued);
+  };
+
   const refreshSessionInfo = async () => {
-    refreshSessionInfoPromise = refreshSessionInfoPromise.then(
-      runRefreshSessionInfo,
-      runRefreshSessionInfo,
-    );
-    await refreshSessionInfoPromise;
+    if (refreshSessionInfoInFlight) {
+      refreshSessionInfoQueued = true;
+      await refreshSessionInfoInFlight;
+      return;
+    }
+    refreshSessionInfoInFlight = drainRefreshSessionInfo().finally(() => {
+      refreshSessionInfoInFlight = null;
+    });
+    await refreshSessionInfoInFlight;
   };
 
   const applySessionInfoFromPatch = (

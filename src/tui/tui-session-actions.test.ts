@@ -95,7 +95,7 @@ describe("tui session actions", () => {
     const first = refreshSessionInfo();
     const second = refreshSessionInfo();
 
-    await Promise.resolve();
+    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(listSessions).toHaveBeenCalledTimes(1);
     expect(listSessions).toHaveBeenNthCalledWith(1, {
       limit: TUI_SESSION_LOOKUP_LIMIT,
@@ -119,8 +119,7 @@ describe("tui session actions", () => {
       ],
     });
 
-    await first;
-    await Promise.resolve();
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(listSessions).toHaveBeenCalledTimes(2);
 
@@ -138,12 +137,101 @@ describe("tui session actions", () => {
       ],
     });
 
-    await second;
+    await Promise.all([first, second]);
 
     expect(state.sessionInfo.model).toBe("Minimax-M2.7");
     expect(updateAutocompleteProvider).toHaveBeenCalledTimes(2);
     expect(updateFooter).toHaveBeenCalledTimes(2);
     expect(requestRender).toHaveBeenCalledTimes(2);
+  });
+
+  it("coalesces refresh bursts into a single follow-up lookup", async () => {
+    let resolveFirst: ((value: unknown) => void) | undefined;
+    let resolveSecond: ((value: unknown) => void) | undefined;
+
+    const listSessions = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+    const { refreshSessionInfo } = createTestSessionActions({
+      client: { listSessions } as unknown as TuiBackend,
+    });
+
+    const first = refreshSessionInfo();
+    const second = refreshSessionInfo();
+    const third = refreshSessionInfo();
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(listSessions).toHaveBeenCalledTimes(1);
+
+    resolveFirst?.({
+      defaults: {},
+      sessions: [{ key: "agent:main:main", updatedAt: 1 }],
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(listSessions).toHaveBeenCalledTimes(2);
+
+    resolveSecond?.({
+      defaults: {},
+      sessions: [{ key: "agent:main:main", updatedAt: 2 }],
+    });
+    await Promise.all([first, second, third]);
+
+    expect(listSessions).toHaveBeenCalledTimes(2);
+  });
+
+  it("skips UI work when session refresh metadata is unchanged", async () => {
+    const listSessions = vi.fn().mockResolvedValue({
+      ts: Date.now(),
+      path: "/tmp/sessions.json",
+      count: 1,
+      defaults: {},
+      sessions: [
+        {
+          key: "agent:main:main",
+          model: "sonnet-4.6",
+          modelProvider: "anthropic",
+          totalTokens: 42,
+          updatedAt: 200,
+        },
+      ],
+    });
+    const state = createBaseState({
+      sessionInfo: {
+        model: "sonnet-4.6",
+        modelProvider: "anthropic",
+        totalTokens: 42,
+        updatedAt: 100,
+      },
+    });
+    const updateFooter = vi.fn();
+    const updateAutocompleteProvider = vi.fn();
+    const requestRender = vi.fn();
+
+    const { refreshSessionInfo } = createTestSessionActions({
+      client: { listSessions } as unknown as TuiBackend,
+      state,
+      updateFooter,
+      updateAutocompleteProvider,
+      tui: { requestRender } as unknown as import("@earendil-works/pi-tui").TUI,
+    });
+
+    await refreshSessionInfo();
+
+    expect(state.sessionInfo.updatedAt).toBe(200);
+    expect(updateAutocompleteProvider).not.toHaveBeenCalled();
+    expect(updateFooter).not.toHaveBeenCalled();
+    expect(requestRender).not.toHaveBeenCalled();
   });
 
   it("keeps patched model selection when a refresh returns an older snapshot", async () => {
