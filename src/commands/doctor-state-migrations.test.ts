@@ -629,7 +629,7 @@ describe("doctor legacy state migrations", () => {
     result: Awaited<ReturnType<typeof runLegacyStateMigrations>>;
     targetDir: string;
     legacySessionsDir: string;
-    store: Record<string, { sessionId: string }>;
+    store: Record<string, { sessionId: string; sessionFile?: string }>;
   };
 
   beforeAll(async () => {
@@ -638,8 +638,12 @@ describe("doctor legacy state migrations", () => {
     const legacySessionsDir = writeLegacySessionsFixture({
       root,
       sessions: {
-        "+1555": { sessionId: "a", updatedAt: 10 },
-        "+1666": { sessionId: "b", updatedAt: 20 },
+        "+1555": {
+          sessionId: "a",
+          sessionFile: path.join(root, "sessions", "a.jsonl"),
+          updatedAt: 10,
+        },
+        "+1666": { sessionId: "b", sessionFile: "b.jsonl", updatedAt: 20 },
         "slack:channel:C123": { sessionId: "c", updatedAt: 30 },
         "group:abc": { sessionId: "d", updatedAt: 40 },
         "subagent:xyz": { sessionId: "e", updatedAt: 50 },
@@ -661,7 +665,7 @@ describe("doctor legacy state migrations", () => {
     const targetDir = path.join(root, "agents", "main", "sessions");
     const store = JSON.parse(
       fs.readFileSync(path.join(targetDir, "sessions.json"), "utf-8"),
-    ) as Record<string, { sessionId: string }>;
+    ) as Record<string, { sessionId: string; sessionFile?: string }>;
 
     migratedLegacySessionsCase = { result, targetDir, legacySessionsDir, store };
   });
@@ -676,11 +680,116 @@ describe("doctor legacy state migrations", () => {
     expect(store["agent:main:main"]?.sessionId).toBe("b");
     expect(store["agent:main:+1555"]?.sessionId).toBe("a");
     expect(store["agent:main:+1666"]?.sessionId).toBe("b");
+    expect(store["agent:main:+1555"]?.sessionFile).toBe(path.join(targetDir, "a.jsonl"));
+    expect(store["agent:main:+1666"]?.sessionFile).toBe(path.join(targetDir, "b.jsonl"));
     expect(store["+1555"]).toBeUndefined();
     expect(store["+1666"]).toBeUndefined();
     expect(store["agent:main:slack:channel:c123"]?.sessionId).toBe("c");
     expect(store["agent:main:unknown:group:abc"]?.sessionId).toBe("d");
     expect(store["agent:main:subagent:xyz"]?.sessionId).toBe("e");
+  });
+
+  it("repairs stale transcript paths left by a shipped legacy migration", async () => {
+    const root = await makeTempRoot();
+    const legacyDir = path.join(root, "sessions");
+    const targetDir = path.join(root, "agents", "main", "sessions");
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(targetDir, "legacy.jsonl"),
+      '{"type":"session","id":"legacy"}\n',
+      "utf8",
+    );
+    writeJson5(path.join(targetDir, "sessions.json"), {
+      "agent:main:main": {
+        sessionId: "legacy",
+        sessionFile: path.join(legacyDir, "legacy.jsonl"),
+        updatedAt: 10,
+      },
+    });
+
+    const detected = await detectLegacyStateMigrations({
+      cfg: {},
+      env: { OPENCLAW_STATE_DIR: root } as NodeJS.ProcessEnv,
+    });
+    expect(detected.preview).toContain(
+      `- Sessions: repair migrated transcript paths in ${path.join(targetDir, "sessions.json")}`,
+    );
+
+    const result = await runLegacyStateMigrations({ detected });
+    expect(result.warnings).toStrictEqual([]);
+    expect(result.changes).toContain("Repaired migrated session transcript paths");
+    const store = JSON.parse(
+      fs.readFileSync(path.join(targetDir, "sessions.json"), "utf8"),
+    ) as Record<string, { sessionFile?: string }>;
+    expect(store["agent:main:main"]?.sessionFile).toBe(path.join(targetDir, "legacy.jsonl"));
+  });
+
+  it("does not bind stale session metadata to a colliding target transcript", async () => {
+    const root = await makeTempRoot();
+    const legacyDir = path.join(root, "sessions");
+    const targetDir = path.join(root, "agents", "main", "sessions");
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(targetDir, "legacy.jsonl"),
+      '{"type":"session","id":"other"}\n',
+      "utf8",
+    );
+    fs.writeFileSync(
+      path.join(targetDir, "legacy.legacy-123.jsonl"),
+      '{"type":"session","id":"legacy"}\n',
+      "utf8",
+    );
+    writeJson5(path.join(targetDir, "sessions.json"), {
+      "agent:main:main": {
+        sessionId: "legacy",
+        sessionFile: path.join(legacyDir, "legacy.jsonl"),
+        updatedAt: 10,
+      },
+    });
+
+    const detected = await detectLegacyStateMigrations({
+      cfg: {},
+      env: { OPENCLAW_STATE_DIR: root } as NodeJS.ProcessEnv,
+    });
+    expect(detected.sessions.hasLegacy).toBe(false);
+    expect(detected.preview).not.toContain(
+      `- Sessions: repair migrated transcript paths in ${path.join(targetDir, "sessions.json")}`,
+    );
+  });
+
+  it("tolerates malformed session-store entries during stale-path detection", async () => {
+    const root = await makeTempRoot();
+    const targetDir = path.join(root, "agents", "main", "sessions");
+    fs.mkdirSync(targetDir, { recursive: true });
+    writeJson5(path.join(targetDir, "sessions.json"), { broken: null });
+
+    await expect(
+      detectLegacyStateMigrations({
+        cfg: {},
+        env: { OPENCLAW_STATE_DIR: root } as NodeJS.ProcessEnv,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("repairs canonical headerless legacy transcript paths", async () => {
+    const root = await makeTempRoot();
+    const legacyDir = path.join(root, "sessions");
+    const targetDir = path.join(root, "agents", "main", "sessions");
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(path.join(targetDir, "legacy.jsonl"), '{"role":"user"}\n', "utf8");
+    writeJson5(path.join(targetDir, "sessions.json"), {
+      "agent:main:main": {
+        sessionId: "legacy",
+        sessionFile: path.join(legacyDir, "legacy.jsonl"),
+        updatedAt: 10,
+      },
+    });
+
+    const detected = await detectLegacyStateMigrations({
+      cfg: {},
+      env: { OPENCLAW_STATE_DIR: root } as NodeJS.ProcessEnv,
+    });
+    expect(detected.sessions.hasLegacy).toBe(true);
   });
 
   it("migrates the legacy shared state agent registry primary key", async () => {

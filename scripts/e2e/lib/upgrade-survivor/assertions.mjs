@@ -1,10 +1,7 @@
 // Assertions for upgrade-survivor E2E scenarios.
 import fs from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import { readPluginInstallIndex } from "../plugin-index-sqlite.mjs";
-
-const require = createRequire(import.meta.url);
 
 const command = process.argv[2];
 const SCENARIOS = new Set([
@@ -90,30 +87,6 @@ function assert(condition, message) {
   }
 }
 
-function readSessionRowsFromAgentSqlite(stateDir, agentId = "main") {
-  const dbPath = path.join(stateDir, "agents", agentId, "agent", "openclaw-agent.sqlite");
-  assert(fs.existsSync(dbPath), `agent SQLite session database missing: ${dbPath}`);
-  const { DatabaseSync } = require("node:sqlite");
-  const db = new DatabaseSync(dbPath, { readOnly: true });
-  try {
-    const rows = db
-      .prepare("SELECT key, value_json FROM cache_entries WHERE scope = ? ORDER BY key ASC")
-      .all("session_entries");
-    return Object.fromEntries(
-      rows.map((row) => {
-        assert(typeof row.key === "string", "session SQLite row key was not a string");
-        assert(
-          typeof row.value_json === "string",
-          `session SQLite row ${String(row.key)} had no JSON payload`,
-        );
-        return [row.key, JSON.parse(row.value_json)];
-      }),
-    );
-  } finally {
-    db.close();
-  }
-}
-
 function seedLegacySessionMetadata(stateDir) {
   const legacySessionsDir = path.join(stateDir, "sessions");
   writeJson(path.join(legacySessionsDir, "sessions.json"), {
@@ -150,9 +123,16 @@ function seedLegacySessionMetadata(stateDir) {
       lastTo: "CUPGRADE",
     },
   });
-  write(path.join(legacySessionsDir, `${LEGACY_SESSION_MAIN_ID}.jsonl`), '{"type":"main"}\n');
-  write(path.join(legacySessionsDir, `${LEGACY_SESSION_DIRECT_ID}.jsonl`), '{"type":"direct"}\n');
-  write(path.join(legacySessionsDir, `${LEGACY_SESSION_GROUP_ID}.jsonl`), '{"type":"group"}\n');
+  for (const sessionId of [
+    LEGACY_SESSION_MAIN_ID,
+    LEGACY_SESSION_DIRECT_ID,
+    LEGACY_SESSION_GROUP_ID,
+  ]) {
+    write(
+      path.join(legacySessionsDir, `${sessionId}.jsonl`),
+      `${JSON.stringify({ type: "session", id: sessionId })}\n`,
+    );
+  }
 }
 
 function getScenario() {
@@ -437,7 +417,7 @@ function assertStateSurvived() {
     "legacy session file missing",
   );
   if (stage !== "baseline") {
-    assertSessionMetadataMigratedToSqlite(stateDir);
+    assertSessionMetadataMigrated(stateDir);
   }
   const legacyRuntimeRoot = path.join(stateDir, "plugin-runtime-deps");
   if (stage === "baseline") {
@@ -482,9 +462,10 @@ function assertStateSurvived() {
   }
 }
 
-function assertSessionMetadataMigratedToSqlite(stateDir) {
+function assertSessionMetadataMigrated(stateDir) {
   const legacyStorePath = path.join(stateDir, "sessions", "sessions.json");
   const agentSessionsDir = path.join(stateDir, "agents", "main", "sessions");
+  const targetStorePath = path.join(agentSessionsDir, "sessions.json");
   assert(
     !fs.existsSync(legacyStorePath),
     `legacy sessions.json survived migration: ${legacyStorePath}`,
@@ -500,19 +481,14 @@ function assertSessionMetadataMigratedToSqlite(stateDir) {
     );
   }
 
-  const store = readSessionRowsFromAgentSqlite(stateDir);
+  assert(fs.existsSync(targetStorePath), `agent session store missing: ${targetStorePath}`);
+  const store = readJson(targetStorePath);
   const main = store["agent:main:main"];
   const direct = store["agent:main:+15551234567"];
   const group = store["agent:main:slack:channel:cupgrade"];
-  assert(main?.sessionId === LEGACY_SESSION_MAIN_ID, "main legacy session row missing from SQLite");
-  assert(
-    direct?.sessionId === LEGACY_SESSION_DIRECT_ID,
-    "direct legacy session row missing from SQLite",
-  );
-  assert(
-    group?.sessionId === LEGACY_SESSION_GROUP_ID,
-    "channel legacy session row missing from SQLite",
-  );
+  assert(main?.sessionId === LEGACY_SESSION_MAIN_ID, "main legacy session row missing");
+  assert(direct?.sessionId === LEGACY_SESSION_DIRECT_ID, "direct legacy session row missing");
+  assert(group?.sessionId === LEGACY_SESSION_GROUP_ID, "channel legacy session row missing");
   assert(
     main?.sessionFile === path.join(agentSessionsDir, `${LEGACY_SESSION_MAIN_ID}.jsonl`),
     "main legacy session row still points at the old sessions directory",
@@ -531,7 +507,7 @@ function assertSessionMetadataMigratedToSqlite(stateDir) {
   );
   assert(
     main.skillsSnapshot?.resolvedSkills === undefined,
-    "heavy resolvedSkills cache was persisted into SQLite session metadata",
+    "heavy resolvedSkills cache was persisted into migrated session metadata",
   );
 }
 
