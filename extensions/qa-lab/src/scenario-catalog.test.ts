@@ -56,8 +56,10 @@ describe("qa scenario catalog", () => {
     ).toStrictEqual(
       [
         "control-ui-chat-flow-playwright",
+        "gateway-smoke",
         "package-openclaw-for-docker",
         "plugin-lifecycle-probe",
+        "qa-otel-smoke",
       ].toSorted(),
     );
     expect(
@@ -195,6 +197,15 @@ describe("qa scenario catalog", () => {
         expectedLayer: "openclaw-dynamic",
         capabilityLayer: "openclaw-dynamic-direct",
         required: true,
+      },
+    });
+    expect(webSearch.plugins).toEqual(["qa-lab"]);
+    expect(webSearch.gatewayConfigPatch?.tools).toEqual({
+      web: {
+        search: {
+          enabled: true,
+          provider: "qa-lab-search",
+        },
       },
     });
     expect(readQaScenarioExecutionConfig(webSearch.id)).not.toHaveProperty("knownHarnessGap");
