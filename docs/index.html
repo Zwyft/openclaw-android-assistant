@@ -753,24 +753,51 @@ bash scripts/build-server-bundle.sh && ./gradlew assembleDebug \
     <li>Plugins and updates: repair missing required platform packages during managed plugin installs and updates, including omitted Codex platform binaries</li>
     <li>Dependencies: update Hono to 4.12.25 so published OpenClaw and ACPX packages use the patched runtime</li>
     <li>Release and test reliability: extend slow Gateway/full-suite watchdogs, split local full-suite shards when throttled, stabilize plugin auth marker fixtures, avoid brittle provider-ref error text, fold Telegram RTT sampling into live QA evidence, simplify QA scorecard mappings around canonical coverage IDs, keep QA Lab bootstrap selection assertions aligned with flow-only scenarios, skip QA coverage artifact consumers when runtime parity producer status is not green, keep Feishu lifecycle release checks pointed at the active fixture config, isolate trajectory-export live seed turns from Codex-native shell approvals, preserve release-check child refs while pinning expected SHAs, widen live OpenAI TTS budgets for slower provider responses, and avoid false downgrade prompts for unresolved latest-tag updates. (#92652, #92550, #92558, #92911) and @Andy312432</li>
-    <li>npm package: https://www.npmjs.com/package/openclaw/v/2026.6.8</li>
-    <li>registry tarball: https://registry.npmjs.org/openclaw/-/openclaw-2026.6.8.tgz</li>
-    <li>integrity: `sha512-iziR8fi69+ojrtX7FYYvTpkGcVnmyLpIhvchgt5LFkkdHVWw973XAAekKVZ3/xQJ5FG4NwgHkXL0LLTrgsNOSQ==`</li>
-    <li>release SHA: `844f405ac1be805d5c598922a37254f12ab6d765`</li>
-    <li>full release CI report: https://github.com/openclaw/releases/blob/main/evidence/2026.6.8/release-evidence.md</li>
-    <li>release publish: https://github.com/openclaw/openclaw/actions/runs/27631170936</li>
-    <li>npm preflight: https://github.com/openclaw/openclaw/actions/runs/27627935264</li>
-    <li>full release validation: https://github.com/openclaw/openclaw/actions/runs/27627935341</li>
-    <li>plugin npm publish: https://github.com/openclaw/openclaw/actions/runs/27631412538</li>
-    <li>plugin ClawHub publish: https://github.com/openclaw/openclaw/actions/runs/27631418543</li>
-    <li>plugin ClawHub bootstrap: not needed</li>
-    <li>OpenClaw npm publish: https://github.com/openclaw/openclaw/actions/runs/27632229765</li>
-    <li>npm Telegram beta E2E: not supplied</li>
-    <li>Windows Hub promotion: https://github.com/openclaw/openclaw/actions/runs/27632639125 from openclaw/openclaw-windows-node@v0.6.3</li>
-    <li>macOS signed/notarized preflight: https://github.com/openclaw/releases/actions/runs/27632793120</li>
-    <li>macOS Swift validation: https://github.com/openclaw/releases/actions/runs/27632792831</li>
-    <li>macOS asset promotion: https://github.com/openclaw/releases/actions/runs/27635471007</li>
-    <li>stable appcast: https://github.com/openclaw/openclaw/pull/93722</li>
+    <li>**PR #92144** fix(cron): report SQLite storage path in cron.status instead of legacy jobs.json. Related #91766. and @AaronFaby</li>
+    <li>**PR #92175** fix(channel): harden local setup trust</li>
+    <li>**PR #92073** fix: handle explicit silent assistant replies</li>
+    <li>**PR #92087** fix(docker): bundle QA Lab runtime in the image</li>
+    <li>**PR #92387** fix(anthropic-vertex): stop re-marking cache_control on transport-budgeted payloads. and @Takhoffman</li>
+    <li>**PR #92229** Fix doctor preview channel SecretRef resolution</li>
+    <li>**PR #92225** Fix disabled heartbeat one-shot cron retries</li>
+    <li>**PR #92265** Fix configured DeepSeek model transport inheritance</li>
+    <li>**PR #92226** Fail closed for CLI-backed /btw fallback</li>
+    <li>**PR #92231** Fix suppressed heartbeat commitment delivery</li>
+    <li>**PR #92280** fix(agents): classify structured unsupported model errors</li>
+    <li>**PR #92276** Fix OTLP log trace correlation</li>
+    <li>**PR #92282** fix(update): hand off Linux service auto-updates</li>
+    <li>**PR #92235** fix: resolve managed SecretRef provider auth</li>
+    <li>**PR #92293** Fix provider static model fallback resolution</li>
+    <li>**PR #92343** fix(agent): continue after source message tool replies</li>
+    <li>**PR #92350** fix(codex): preserve memory prompt registration</li>
+    <li>**PR #92290** fix: clarify gateway SecretRef auth diagnostics</li>
+    <li>**PR #92286** fix: repair rejected Anthropic thinking replay</li>
+    <li>**PR #92281** Fix Telegram spooled buffered replay</li>
+    <li>**PR #92416** fix(outbound): honor top-level image param as send media source . and @ichirokyoto</li>
+    <li>**PR #92508** fix(sandbox): render CLI skill prompts from materialized paths</li>
+    <li>**PR #92540** chore: fix esbuild production audit failure</li>
+    <li>**PR #91484** Add QA evidence artifact output</li>
+    <li>**PR #91500** Add QA scorecard taxonomy validation</li>
+    <li>**PR #92554** feat(moonshot): add Kimi K2.7 Code support</li>
+    <li>**PR #92396** fix(moonshot): backfill reasoning_content on assistant tool-call replay messages. Related #71491. and @RoseKongPS</li>
+    <li>**PR #92566** Fix lifecycle timeout cleanup after leader exit</li>
+    <li>**PR #88993** Expose paged channel action results</li>
+    <li>**PR #90326** fix(fireworks): resolve catalog model params from plugin.json via core</li>
+    <li>**PR #86629** fix(doctor): warn for untrusted external Discord plugin. Related #83212. and @cdeyoung67</li>
+    <li>**PR #90242** fix(providers): skip unreadable Mistral tool schemas</li>
+    <li>**PR #92498** fix(reply): mirror same-channel Slack final replies. Related #92489. and @TalkingHeadsJed</li>
+    <li>**PR #92083** fix(channels): default boundary logger for swallowed progress-draft start errors</li>
+    <li>**PR #92031** fix(channels): make timer-fired progress-draft start errors observable</li>
+    <li>**PR #92564** fix(agents): isolate invalid plugin model catalogs [AI-assisted]. Related #92553. and @fxstein</li>
+    <li>**PR #89827** docs: UX-013 — design system documentation</li>
+    <li>**PR #89615** feat(ui): hide empty workboard columns</li>
+    <li>**PR #89822** fix(a11y): B-1+B-2+B-3 — contrast, focus states, minimum font sizes</li>
+    <li>**PR #92618** fix #92218: memory_search tool disabled with QMD backend. and @zhbcher</li>
+    <li>**PR #92608** docs(gateway): add uptime monitoring guidance to health check docs (fixes #55768). and @faahim</li>
+    <li>**PR #92605** fix(docs): pin Windows Hub download links to v2026.6.5. Related #92470. and @arjkul</li>
+    <li>**PR #92593** #92589: fix(internal-runtime-context): wrap prompt-preface runtime context body in delimiters. and @jovi2014-cyber</li>
+    <li>**PR #92606** Run Vitest and Playwright scenarios from qa suite</li>
+    <li>**PR #89629** feat(hooks): per-turn usageState on reply_payload_sending</li>
     </ul>
   </div>
   <!-- RELEASE_END -->
