@@ -728,18 +728,24 @@ const TOOLING_SOURCE_TEST_TARGETS = new Map([
   ["scripts/docs-link-audit.mjs", ["src/scripts/docs-link-audit.test.ts"]],
   ["scripts/lib/arg-utils.mjs", ["test/scripts/arg-utils.test.ts"]],
   [
+    "scripts/lib/android-version.ts",
+    ["test/scripts/android-version.test.ts", "test/scripts/android-pin-version.test.ts"],
+  ],
+  [
     "scripts/lib/bundled-plugin-build-entries.mjs",
-    ["test/scripts/bundled-plugin-build-entries.test.ts"],
+    ["test/scripts/bundled-plugin-build-entries.test.ts", "test/release-check.test.ts"],
   ],
   [
     "scripts/lib/bundled-plugin-source-utils.mjs",
     ["test/scripts/bundled-plugin-source-utils.test.ts"],
   ],
+  ["scripts/lib/changed-extensions.mjs", ["test/scripts/test-extension.test.ts"]],
   ["scripts/lib/dev-tooling-safety.ts", ["test/scripts/dev-tooling-safety.test.ts"]],
   [
     "scripts/lib/deprecated-plugin-sdk-usage.mjs",
     ["test/scripts/check-deprecated-api-usage.test.ts"],
   ],
+  ["scripts/lib/direct-run.mjs", ["test/scripts/changed-lanes.test.ts"]],
   ["scripts/docker/cleanup-smoke/run.sh", ["test/scripts/docker-build-helper.test.ts"]],
   [
     "scripts/docker/install-sh-e2e/run.sh",
@@ -749,13 +755,57 @@ const TOOLING_SOURCE_TEST_TARGETS = new Map([
   ["scripts/docker/install-sh-smoke/run.sh", ["test/scripts/test-install-sh-docker.test.ts"]],
   ["scripts/lib/docker-e2e-container.sh", ["test/scripts/docker-build-helper.test.ts"]],
   ["scripts/lib/docker-e2e-package.sh", ["test/scripts/docker-build-helper.test.ts"]],
+  [
+    "scripts/lib/docker-e2e-plan.mjs",
+    [
+      "test/scripts/docker-e2e-plan.test.ts",
+      "test/scripts/docker-all-scheduler.test.ts",
+      "test/scripts/plugin-prerelease-test-plan.test.ts",
+    ],
+  ],
   ["scripts/lib/format-generated-module.mjs", ["test/scripts/format-generated-module.test.ts"]],
+  [
+    "scripts/lib/ios-version.ts",
+    ["test/scripts/ios-version.test.ts", "test/scripts/ios-pin-version.test.ts"],
+  ],
   ["scripts/lib/live-docker-stage.sh", ["test/scripts/live-docker-stage.test.ts"]],
   ["scripts/lib/local-heavy-check-runtime.mjs", ["test/scripts/local-heavy-check-runtime.test.ts"]],
   ["scripts/lib/kova-report-gate.mjs", ["test/scripts/kova-report-gate.test.ts"]],
   ["scripts/lib/managed-child-process.mjs", ["test/scripts/managed-child-process.test.ts"]],
+  [
+    "scripts/lib/local-build-metadata.mjs",
+    [
+      "src/infra/build-stamp.test.ts",
+      "test/scripts/runtime-postbuild-stamp.test.ts",
+      "src/infra/run-node.test.ts",
+      "src/infra/package-dist-inventory.test.ts",
+      "test/release-check.test.ts",
+      "test/openclaw-npm-release-check.test.ts",
+      "test/scripts/check-gateway-watch-regression.test.ts",
+      "test/scripts/check-openclaw-package-tarball.test.ts",
+      "test/scripts/openclaw-cross-os-release-checks.test.ts",
+    ],
+  ],
+  [
+    "scripts/lib/local-build-metadata-paths.mjs",
+    [
+      "src/infra/build-stamp.test.ts",
+      "test/scripts/runtime-postbuild-stamp.test.ts",
+      "src/infra/run-node.test.ts",
+      "src/infra/package-dist-inventory.test.ts",
+      "test/release-check.test.ts",
+      "test/openclaw-npm-release-check.test.ts",
+      "test/scripts/check-gateway-watch-regression.test.ts",
+      "test/scripts/check-openclaw-package-tarball.test.ts",
+      "test/scripts/openclaw-cross-os-release-checks.test.ts",
+    ],
+  ],
   ["scripts/lib/npm-verify-exec.ts", ["test/scripts/npm-verify-exec.test.ts"]],
   ["scripts/lib/openclaw-test-state.mjs", ["test/scripts/openclaw-test-state.test.ts"]],
+  [
+    "scripts/lib/workspace-bootstrap-smoke.mjs",
+    ["test/release-check.test.ts", "test/openclaw-npm-release-check.test.ts"],
+  ],
   [
     "scripts/lib/package-dist-imports.mjs",
     [
@@ -775,7 +825,7 @@ const TOOLING_SOURCE_TEST_TARGETS = new Map([
   ],
   [
     "scripts/lib/plugin-npm-runtime-build.mjs",
-    ["test/scripts/plugin-npm-runtime-build-args.test.ts"],
+    ["test/scripts/plugin-npm-runtime-build-args.test.ts", "test/plugin-npm-runtime-build.test.ts"],
   ],
   [
     "scripts/lib/npm-publish-plan.mjs",
@@ -807,7 +857,10 @@ const TOOLING_SOURCE_TEST_TARGETS = new Map([
   ],
   [
     "scripts/lib/plugin-npm-package-manifest.mjs",
-    ["test/scripts/plugin-npm-package-manifest-args.test.ts"],
+    [
+      "test/scripts/plugin-npm-package-manifest-args.test.ts",
+      "test/plugin-npm-package-manifest.test.ts",
+    ],
   ],
   [
     "scripts/lib/plugin-npm-runtime-assets.mjs",
@@ -949,6 +1002,7 @@ const TOOLING_SOURCE_TEST_TARGETS = new Map([
     ["test/scripts/code-mode-namespace-live.test.ts", "test/scripts/docker-build-helper.test.ts"],
   ],
   ["scripts/lib/extension-test-plan.mjs", ["test/scripts/test-extension.test.ts"]],
+  ["scripts/lib/extension-vitest-paths.mjs", ["test/scripts/test-extension.test.ts"]],
   ["scripts/lib/vitest-batch-runner.mjs", ["test/scripts/test-extension.test.ts"]],
   ["scripts/lib/ci-node-test-plan.mjs", ["test/scripts/ci-node-test-plan.test.ts"]],
   [
