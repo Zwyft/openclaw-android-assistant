@@ -730,74 +730,45 @@ bash scripts/build-server-bundle.sh && ./gradlew assembleDebug \
 <div class="section" id="release">
   <p class="section-label">Latest upstream release</p>
   <!-- RELEASE_START -->
-  <h2><em>openclaw 2026.6.9</em></h2>
-  <p class="release-date" style="font-family:var(--mono);font-size:.8rem;color:var(--text-dim);margin-bottom:2rem">Released Jun 21, 2026</p>
+  <h2><em>openclaw 2026.6.10</em></h2>
+  <p class="release-date" style="font-family:var(--mono);font-size:.8rem;color:var(--text-dim);margin-bottom:2rem">Released Jun 24, 2026</p>
   <div class="release-body" style="color:var(--text-dim);font-size:.92rem;line-height:1.75;max-width:800px">
   <h3>Changes</h3>
     <ul>
-    <li>Providers and auth: add Codex Hosted Search, improve Gemini CLI OAuth behind proxies, and keep external provider onboarding on current choices and package metadata. (#93446, #92815) @yetval, @EvetteYoung, and @vincentkoc</li>
-    <li>Plugins and installs: externalized official providers publish as independent npm packages, Gateway discovers installed channel plugins at startup, and StepFun installs from npm or ClawHub. @cxdnicole, and @vincentkoc</li>
-    <li>Dashboard and mobile: add a session workspace rail, plugin health in status, compact cron lists, and iOS Watch controls. (#92856, #91952, #93395, #93387) @jalehman, @yu-xin-c, @centralpc, @joshavant, and @vincentkoc</li>
-    <li>Codex, observability, and skills: add automatic plugin approvals and SecretRefs, preserve ClawHub skill provenance, add OpenTelemetry log export, and expose remote-node execution to Codex when a node is connected. (#92625, #94324, #93283, #94561, #93654) @kevinlin-openai, @momothemage, @nmccready-tars, @jesse-merhi, @vincentkoc, and @JPKay-AI</li>
-    <li>QA and release engineering: QA scenarios now use YAML, with broader profile evidence and release coverage for the plugin and channel matrix</li>
+    <li>**Agent and channel runtime:** fast-mode state now survives retries, fallback transitions, progress events, and embedded/CLI/ACP normalization; session and channel routing retain the current target and delivery context. (#85104, #93580, #95328) @vincentkoc, @scotthuang, @ZengWen-DT, @jalehman, and @gorkem2020</li>
+    <li>**Provider behavior:** model catalogs now supply the correct Zai base URL, overload classification, and native reasoning controls for live-discovered models. (#94461, #93241, #94067, #94136) @chrysb, @0xghost42, @zhengli0922, @openperf, @civiltox, and @BorClaw</li>
     </ul>
     <h3>Fixes</h3>
     <ul>
-    <li>Security and privacy: redact secrets from debug/config output, block internal HTTP session overrides, audit open-DM tool exposure, and retain plugin write ownership checks. (#93333, #88496, #93443, #92883, #93353) @jason-allen-oneal, @coygeek, @RichardCao, @yu-xin-c, @cjg20ss, @eleqtrizit, and @vincentkoc</li>
-    <li>Agent and session runtime: retry thinking-only and empty post-tool turns, prevent duplicate hook execution, preserve pending subagent delivery, preserve fresh usage through compaction, and repair partial JSON/history artifacts. (#92191, #93073, #93009, #93084, #93469, #94349, #92383, #94257) @lml2468, @fuller-stack-dev, @zenglingbiao, @dertbv, @Hollychou924, @leno23, @de1tydev, @425072024, @wuwahe3, @drvoss, @vincentkoc, @sallyom, @oiGaDio, @Hidetsugu55, and @Nas01010101</li>
-    <li>Channels and replies: fix Telegram rich delivery, table rendering, action-error handling, and ingress recovery; preserve command progress detail across channel adapters; retain WhatsApp opening text after a media failure; keep Mattermost thread replies intact; and harden Discord action handling. (#93286, #93364, #93281, #93076, #93334, #93424, #93488, #94868, #94891, #94856, #94810, #93823) @NianJiuZst, @mcaxtr, @rushindrasinha, @amknight, @lzyyzznl, @darealgege, @vincentkoc, @zhangqueping, @jairrab, @ZOOWH, @parveshsaini, and @yetval</li>
-    <li>Storage and migrations: avoid SQLite WAL on network filesystems, clean reindex artifacts, keep setup state out of workspace dot-directories, and import default-agent auth profiles into SQLite. (#93454, #92891, #93182, #93295, #93520, #93156) @ZengWen-DT, @Zeng-wen, @potterdigital, @Alix-007, @Pick-cat, @sallyom, @1qh, and @Tazio7</li>
-    <li>Provider and model behavior: fix Gemini CLI proxy OAuth, restore Codex Spark OAuth routing, correct Bedrock embedding model IDs, and preserve configured defaults in embedded runs. (#92815, #89133, #93452, #93428) @EvetteYoung, @VACInc, @LiuwqGit, @aleck31, @zenglingbiao, @danielgerlag, and @vincentkoc</li>
-    <li>CLI, TUI, and apps: accept global flags after subcommands, keep terminal output and activity indicators visible, preserve CJK IME composition, and refresh stale UI state. (#93455, #93460, #93006, #93427, #93498, #93606) @Alix-007, @ZengWen-DT, @Zeng-wen, @AlethiaQuizForge, @Zhaoqj2016, @liuhao1024, @BrianClaw1955, @vincentkoc, and @NicoBoom13</li>
-    <li>Operations and updates: harden official plugin recovery, restart managed Gateways after failed update handoff, keep safe cron delivery defaults, avoid Node-specific npm prefixes, and keep package validation paths reliable. (#93325, #92111, #93650, #94453, #91685) @yetval, @ofan, @yaanfpv, @jincheng-xydt, @sallyom, @davectr, and @nxmxbbd</li>
-    <li>**PR #90463** refactor: add session accessor seam with gateway consumer</li>
-    <li>**PR #88656** Drop reasoning-only length turns from replay</li>
-    <li>**PR #92856** feat(webui): add session workspace rail</li>
-    <li>**PR #92845** docs(browser-control): document OPENCLAW_EAGER_BROWSER_CONTROL_SERVER requirement. Related #92841. and @jeugregg</li>
-    <li>**PR #82366** fix: use passive periodic sqlite wal checkpoints. Related #81715. and @KrasimirKralev</li>
-    <li>**PR #92815** fix(google): route Gemini CLI OAuth through the env proxy . and @EvetteYoung</li>
-    <li>**PR #91331** fix(mattermost): merge progress preview lines by identity. Related #89761. and @leonthe8th and @vincentkoc</li>
-    <li>**PR #92909** fix(tui): keep spinner active when toggling tools. Related #49763. and @Zeng-wen and @vincentkoc and @CrimsonDump</li>
-    <li>**PR #92904** fix(elevenlabs): use current TTS model ids. and @vincentkoc</li>
-    <li>**PR #92642** fix #86872: Subagent run reports success but fails to write output file. and @vincentkoc and @zapper35</li>
-    <li>**PR #89122** refactor: route command session reads through seam</li>
-    <li>**PR #90943** fix(reply): deliver final reply when queued follow-up claims session; scope dedupe to routed thread. and @vincentkoc</li>
-    <li>**PR #92894** fix(skills): keep managed prompt paths readable. Related #92875. and @sallyom</li>
-    <li>**PR #39617** fix: reload config in slash command routing so dmScope is respected. Related #39605</li>
-    <li>**PR #92191** fix(agents): retry thinking-only errored turns. Related #91953. and @lml2468</li>
-    <li>**PR #92891** fix(memory): clean stale reindex temp files. Related #92874. and @Zeng-wen and @vincentkoc and @potterdigital</li>
-    <li>**PR #93005** Add OpenRouter Fusion guidance and prompt context. Related #92984</li>
-    <li>**PR #88792** fix(state): harden sqlite path caching</li>
-    <li>**PR #93022** fix(gateway): repair usage cost aggregation across agents. and @stablegenius49</li>
-    <li>**PR #93020** fix(telegram): cool down transient sendChatAction failures. Related #56096. and @sumaiazaman and @Pick-cat and @cal-rufus</li>
-    <li>**PR #89160** fix(agents): detect truncated API responses to prevent silent session hang. Related #89051. and @ArthurusDent</li>
-    <li>**PR #93009** fix(agents): make wrapToolWithBeforeToolCallHook idempotent to prevent double hook execution (fixes #92973). and @dertbv</li>
-    <li>**PR #92991** fix(agents): tolerate missing attribution baseUrl. Related #92974. and @Haderach-Ram</li>
-    <li>**PR #92913** fix(opencode-go): register model catalog to fix context window detection. Related #92912</li>
-    <li>**PR #89129** refactor: route bundled plugin session callers through seam</li>
-    <li>**PR #93084** fix(agents): preserve fresh usage after compaction. Related #50795. and @leno23 and @de1tydev and @425072024 and @vincentkoc and @wuwahe3</li>
-    <li>**PR #92869** fix #90333: [Bug]: Discord image build aborts at step 66 — openclaw-build-messaging-plugins.py exits 1. and @vincentkoc and @chriskosys</li>
-    <li>**PR #93011** fix(gateway): accept file-only input on /v1/responses (parity with image-only). and @vincentkoc</li>
-    <li>**PR #92915** Convert QA scenarios to YAML files</li>
-    <li>**PR #91767** Fix one-shot Codex app-server teardown</li>
-    <li>**PR #92625** feat(codex): add auto plugin approvals</li>
-    <li>**PR #91587** test(qa): add qa run --qa-profile and unified output summary/evidence</li>
-    <li>**PR #93104** test(reply): seed channel fixtures for dedupe tests</li>
-    <li>**PR #93107** test(reply): preserve telegram dedupe fallback</li>
-    <li>**PR #92954** fix(memory): accept local default model path migration. and @vincentkoc</li>
-    <li>**PR #90936** fix(agents): do not misclassify client-disconnect abort as run timeout. Related #90764. and @reginaldomarcilon</li>
-    <li>**PR #90812** fix(voice-call): preserve live Twilio streams in stale reaper. Related #79121. and @sahibzada-allahyar and @donkeykong91</li>
-    <li>**PR #93094** fix(whatsapp): bound socket operations</li>
-    <li>**PR #91629** fix(scripts): add database-first legacy store guard. Related #91628</li>
-    <li>**PR #93124** fix(telegram): render progress drafts as rich previews</li>
-    <li>**PR #93109** test(qa): embed profile scorecard evidence</li>
-    <li>**PR #87298** test: add temp directory helper guidance</li>
-    <li>**PR #92318** fix(cron): require explicit message target proof</li>
-    <li>**PR #93137** fix(imessage): honor disabled reply actions. Related #92142. and @dprev</li>
-    <li>**PR #93134** fix(feishu): pass card_msg_content_type to get full card content (fixes #78289). and @vincentkoc and @longdoubled7</li>
-    <li>**PR #93138** fix(agents): preserve literal current session resolution. and @vincentkoc</li>
-    <li>**PR #91225** fix #83830: [Bug]: Dreaming diary repeats &quot;first day&quot; narrative every sweep — same early memories dominate snippets. and @YinLiuLiu66</li>
-    <li>**PR #93153** simplify QA evidence profile and mappings/coverage shape</li>
+    <li>**Fast-mode and policy correctness:** fallback cutoffs and reset notices are bounded, repeated progress events remain visible, Codex service-tier state is normalized, and trusted policies are not lost when hook registries are composed. (#85104, #94545) @vincentkoc, and @jesse-merhi</li>
+    <li>**Model and delivery edge cases:** Zai and GLM failover paths use the right runtime metadata, while stale channel-origin state no longer leaks across session changes. (#94461, #93241, #95328) @chrysb, @0xghost42, @zhengli0922, @ZengWen-DT, @jalehman, and @gorkem2020</li>
+    <li>**Provider plugin onboarding:** setup refreshes provider plugin registry metadata after installing setup-selected provider plugins, so auth continuation uses the newly installed provider instead of stale registry state</li>
+    <li>**PR #86627** Keep core doctor health in contribution order</li>
+    <li>**PR #93580** fix: preserve cron delivery awareness for target sessions. and @jalehman</li>
+    <li>**PR #95030** refactor: add SDK transcript identity target API</li>
+    <li>**PR #94838** refactor(copilot): complete harness lifecycle parity</li>
+    <li>**PR #95328** fix(sessions): reset stale per-channel origin fields on channel switch. Related #95325. and @jalehman and @gorkem2020</li>
+    <li>**PR #94461** fix(zai): fall back to manifest baseUrl for synthesized GLM-5 models. Related #94269. and @chrysb</li>
+    <li>**PR #93241** fix(agents): classify Zhipu GLM overload as overloaded for failover. Related #93211. and @zhengli0922</li>
+    <li>**PR #94067** fix(channels): resolve native /think menu levels via runtime catalog for live-discovered models. Related #93835. and @civiltox</li>
+    <li>**PR #94136** fix(zai): expose GLM-5.2 reasoning levels [AI-assisted]</li>
+    <li>**PR #85104** feat: fast talks auto mode. Related #85087</li>
+    <li>**PR #94545** fix: keep trusted policies with hook registry</li>
+    <li>**PR #95792** fix(onboard): refresh provider plugin registry after setup installs. Related #95765</li>
+    <li>npm package: https://www.npmjs.com/package/openclaw/v/2026.6.10</li>
+    <li>registry tarball: https://registry.npmjs.org/openclaw/-/openclaw-2026.6.10.tgz</li>
+    <li>integrity: `sha512-LcooND2tBQw8A+kc1Ujltu3lg30bJ0w7XaeRy7eYzobb8BBdcW6DOGbwJL4vpj1vl9+gjRceOtlh5nh9OARcug==`</li>
+    <li>release SHA: `aa69b12d0086b631b139c1435c9621a5783e3a40`</li>
+    <li>full release CI report: https://github.com/openclaw/releases/blob/main/evidence/2026.6.10/release-evidence.md</li>
+    <li>release publish: https://github.com/openclaw/openclaw/actions/runs/28071368306</li>
+    <li>npm preflight: https://github.com/openclaw/openclaw/actions/runs/28068484614</li>
+    <li>full release validation: https://github.com/openclaw/openclaw/actions/runs/28068476120</li>
+    <li>plugin npm publish: https://github.com/openclaw/openclaw/actions/runs/28071564667</li>
+    <li>plugin ClawHub publish: https://github.com/openclaw/openclaw/actions/runs/28071565774</li>
+    <li>plugin ClawHub bootstrap: not needed</li>
+    <li>OpenClaw npm publish: https://github.com/openclaw/openclaw/actions/runs/28071984141</li>
+    <li>npm Telegram beta E2E: not supplied</li>
+    <li>Windows Hub promotion: https://github.com/openclaw/openclaw/actions/runs/28072271374 from openclaw/openclaw-windows-node@v0.6.3</li>
     </ul>
   </div>
   <!-- RELEASE_END -->
