@@ -730,45 +730,74 @@ bash scripts/build-server-bundle.sh && ./gradlew assembleDebug \
 <div class="section" id="release">
   <p class="section-label">Latest upstream release</p>
   <!-- RELEASE_START -->
-  <h2><em>openclaw 2026.6.10</em></h2>
-  <p class="release-date" style="font-family:var(--mono);font-size:.8rem;color:var(--text-dim);margin-bottom:2rem">Released Jun 24, 2026</p>
+  <h2><em>openclaw 2026.6.11</em></h2>
+  <p class="release-date" style="font-family:var(--mono);font-size:.8rem;color:var(--text-dim);margin-bottom:2rem">Released Jun 30, 2026</p>
   <div class="release-body" style="color:var(--text-dim);font-size:.92rem;line-height:1.75;max-width:800px">
   <h3>Changes</h3>
     <ul>
-    <li>**Agent and channel runtime:** fast-mode state now survives retries, fallback transitions, progress events, and embedded/CLI/ACP normalization; session and channel routing retain the current target and delivery context. (#85104, #93580, #95328) @vincentkoc, @scotthuang, @ZengWen-DT, @jalehman, and @gorkem2020</li>
-    <li>**Provider behavior:** model catalogs now supply the correct Zai base URL, overload classification, and native reasoning controls for live-discovered models. (#94461, #93241, #94067, #94136) @chrysb, @0xghost42, @zhengli0922, @openperf, @civiltox, and @BorClaw</li>
+    <li>**Gateway and plugin tooling:** channel identity hook context and per-agent usage-cost reporting give integrations and operators more precise routing and accounting. (#91903, #94483) @vincentkoc, and @ly-wang19</li>
+    <li>**Provider and model coverage:** catalog parsing, reasoning controls, provider model resolution, and encrypted reasoning support now handle more live provider variants. (#95283, #95710, #95268, #95744, #95686, #93956) @vincentkoc, @Marvinthebored, @Darren2030, @daniel-alejandro-t, @parveshsaini, @geraint0923, @fuller-stack-dev, and @jason-allen-oneal</li>
     </ul>
     <h3>Fixes</h3>
     <ul>
-    <li>**Fast-mode and policy correctness:** fallback cutoffs and reset notices are bounded, repeated progress events remain visible, Codex service-tier state is normalized, and trusted policies are not lost when hook registries are composed. (#85104, #94545) @vincentkoc, and @jesse-merhi</li>
-    <li>**Model and delivery edge cases:** Zai and GLM failover paths use the right runtime metadata, while stale channel-origin state no longer leaks across session changes. (#94461, #93241, #95328) @chrysb, @0xghost42, @zhengli0922, @ZengWen-DT, @jalehman, and @gorkem2020</li>
-    <li>**Provider plugin onboarding:** setup refreshes provider plugin registry metadata after installing setup-selected provider plugins, so auth continuation uses the newly installed provider instead of stale registry state</li>
-    <li>**PR #86627** Keep core doctor health in contribution order</li>
-    <li>**PR #93580** fix: preserve cron delivery awareness for target sessions. and @jalehman</li>
-    <li>**PR #95030** refactor: add SDK transcript identity target API</li>
-    <li>**PR #94838** refactor(copilot): complete harness lifecycle parity</li>
-    <li>**PR #95328** fix(sessions): reset stale per-channel origin fields on channel switch. Related #95325. and @jalehman and @gorkem2020</li>
-    <li>**PR #94461** fix(zai): fall back to manifest baseUrl for synthesized GLM-5 models. Related #94269. and @chrysb</li>
-    <li>**PR #93241** fix(agents): classify Zhipu GLM overload as overloaded for failover. Related #93211. and @zhengli0922</li>
-    <li>**PR #94067** fix(channels): resolve native /think menu levels via runtime catalog for live-discovered models. Related #93835. and @civiltox</li>
-    <li>**PR #94136** fix(zai): expose GLM-5.2 reasoning levels [AI-assisted]</li>
-    <li>**PR #85104** feat: fast talks auto mode. Related #85087</li>
+    <li>**Channel delivery:** Telegram progress rendering, webhook lifecycle, reaction directives, duplicate mirror writes, queued update draining, and WhatsApp durable reply targets are now more reliable. (#95532, #93002, #95183, #94506, #94977, #95069, #95577, #95007, #95914) @snowzlmbot, @zhangguiping-xydt, @shadow-enthusiast, @xialonglee, @travellingsoldier85, @obviyus, @hugenshen, @Cuttingwater, @heichaowo, @LiuwqGit, @freidrich-goldenflow, @mcaxtr, and @vincentkoc</li>
+    <li>**WhatsApp and message identity:** native quotes, Baileys group reliability, and approval reactions across JID drift now preserve the intended conversation context. (#95483, #94338, #95935) @xialonglee, and @octopuslabs-fl</li>
+    <li>**Gateway and session safety:** stuck release claims, draining-state reporting, remote probe timeouts, malformed paired access lists, and non-delivery session identity are handled without silent routing loss. (#95299, #94915, #89859, #92178, #95467) @kriegerbangerz-ship-it, @markoub, @vincentkoc, @maxschachere, @mushuiyu886, @gozzbb2, @wangmiao0668000666, @ly-wang19, @EmilioNicolas, @yetval, and @hellocli</li>
+    <li>**Agent and fallback behavior:** aborted runs stop cleanly, provider response bodies stay bounded, Claude CLI credit failures continue through fallback, and Codex usage-limit responses classify correctly. (#94412, #95218, #95508, #95420, #95418, #95417, #95400) @vincentkoc, @Alix-007, @mikasa0818, @sallyom, @riazrahaman, and @jason-allen-oneal</li>
+    <li>**Provider and model edge cases:** OpenRouter IDs, Ollama discovery and embeddings, Gemini freshness, and model-catalog prefixes now resolve against the right runtime metadata. (#95268, #94811, #93956, #95682, #95744) @daniel-alejandro-t, @mushuiyu886, @jason-allen-oneal, @Sunjae-k, @parveshsaini, @vincentkoc, and @shakkernerd</li>
+    <li>**Configuration and UI guardrails:** non-interactive configure fails closed, TLS paths reject empty values, memory artifacts are sanitized, and the UI uses the patched DOMPurify release. (#94238, #94054, #95791, #95691) @NianJiuZst, @miorbnli, @vincentkoc, @SweetSophia, and @YB0y</li>
+    <li>**Cron and delivery validation:** no-config delivery checks, thread-aware dedupe, and pending recurring runs retain their intended destinations. (#95754, #95794, #94323) and @yetval</li>
+    <li>**PR #95406** test(qa): make release scorecard categories explicit</li>
+    <li>**PR #94700** test: fold HTTP API script proof into QA Lab</li>
+    <li>**PR #95499** fix(test): unit-fast flow mocks</li>
+    <li>**PR #95308** fix(ci): filter ClawSweeper comment dispatches before token minting</li>
+    <li>**PR #95532** fix(telegram): materialize rich message line breaks as &lt;br&gt;. Related #95409. and @snowzlmbot</li>
+    <li>**PR #91786** fix(plugins): reconcile managed npm root overrides with managed peer pins. Related #91772. and @mkdelta221</li>
+    <li>**PR #93002** Fix Telegram progress draft cleanup before tool output. Related #90753. and @shadow-enthusiast</li>
+    <li>**PR #95175** fix: route mobile exec approvals to reviewer device</li>
+    <li>**PR #94506** fix(telegram): stop clearing registered webhook on channel restart. Related #90254. and @travellingsoldier85</li>
+    <li>**PR #95183** fix(telegram): materialize streaming progress placeholders. Related #95004. and @obviyus</li>
+    <li>**PR #95483** fix(whatsapp): preserve native quote replies</li>
+    <li>**PR #94338** fix(whatsapp): wire missing Baileys retry/cache hooks for group message reliability. Related #7433. and @mcaxtr and @octopuslabs-fl</li>
+    <li>**PR #94707** feat(slack): add relay mode for incoming messages</li>
+    <li>**PR #94977** fix(telegram): honor outbound reaction directives. Related #71140. and @Cuttingwater</li>
+    <li>**PR #95069** fix(telegram): skip mirror write when primary reply already exists </li>
+    <li>**PR #95550** Preserve inherited channel account policies during migration</li>
+    <li>**PR #95390** fix #95378: https://github.com/openclaw/openclaw/issues/95378. and @obviyus and @MaiDuy708</li>
+    <li>**PR #93143** fix(imessage): keep split-send coalescing opt-in</li>
+    <li>**PR #95008** fix(claude-cli): also disable native background Bash and Monitor in --print runs</li>
     <li>**PR #94545** fix: keep trusted policies with hook registry</li>
-    <li>**PR #95792** fix(onboard): refresh provider plugin registry after setup installs. Related #95765</li>
-    <li>npm package: https://www.npmjs.com/package/openclaw/v/2026.6.10</li>
-    <li>registry tarball: https://registry.npmjs.org/openclaw/-/openclaw-2026.6.10.tgz</li>
-    <li>integrity: `sha512-LcooND2tBQw8A+kc1Ujltu3lg30bJ0w7XaeRy7eYzobb8BBdcW6DOGbwJL4vpj1vl9+gjRceOtlh5nh9OARcug==`</li>
-    <li>release SHA: `aa69b12d0086b631b139c1435c9621a5783e3a40`</li>
-    <li>full release CI report: https://github.com/openclaw/releases/blob/main/evidence/2026.6.10/release-evidence.md</li>
-    <li>release publish: https://github.com/openclaw/openclaw/actions/runs/28071368306</li>
-    <li>npm preflight: https://github.com/openclaw/openclaw/actions/runs/28068484614</li>
-    <li>full release validation: https://github.com/openclaw/openclaw/actions/runs/28068476120</li>
-    <li>plugin npm publish: https://github.com/openclaw/openclaw/actions/runs/28071564667</li>
-    <li>plugin ClawHub publish: https://github.com/openclaw/openclaw/actions/runs/28071565774</li>
-    <li>plugin ClawHub bootstrap: not needed</li>
-    <li>OpenClaw npm publish: https://github.com/openclaw/openclaw/actions/runs/28071984141</li>
-    <li>npm Telegram beta E2E: not supplied</li>
-    <li>Windows Hub promotion: https://github.com/openclaw/openclaw/actions/runs/28072271374 from openclaw/openclaw-windows-node@v0.6.3</li>
+    <li>**PR #95007** fix(telegram): render progress draft rows as plain readable text. Related #95002</li>
+    <li>**PR #95624** fix(agents): keep long-context tool-result prompts cache-stable</li>
+    <li>**PR #95625** fix(ci): smooth PR runner-registration bursts</li>
+    <li>**PR #95572** fix(agents): reject bind specs with extra colon segments</li>
+    <li>**PR #95653** test(agents): add large prompt cache coverage</li>
+    <li>**PR #95640** Consolidate iOS notification permission UX</li>
+    <li>**PR #95546** feat(mattermost): register /oc_queue as a native slash command</li>
+    <li>**PR #95019** fix(skills): point gog brew install at homebrew-core gogcli . and @vincentkoc and @Sedrak-Hovhannisyan</li>
+    <li>**PR #93378** test(telegram): keep live polling leases protected. Related #93375. and @Yachiyo1680</li>
+    <li>**PR #95084** fix(googlechat): sanitize internal tool-trace lines from outbound text . and @studentzhou-svg</li>
+    <li>**PR #95278** Avoid copying process.env in ingress queue state DB opens. Related #94571</li>
+    <li>**PR #95577** fix #86957: drain worker-spooled Telegram updates immediately. and @freidrich-goldenflow</li>
+    <li>**PR #95128** fix(compaction): count user-message image blocks in cut-point estimator</li>
+    <li>**PR #93887** fix(ssh): reject hostnames with stray leading or trailing colons in parseSshTarget</li>
+    <li>**PR #95191** docs(plugins): document subagent_ended hook fields. Related #95186. and @ken-jo</li>
+    <li>**PR #95102** fix(config): add stdio to McpServerSchema transport union. Related #95082. and @ken-jo</li>
+    <li>**PR #95465** fix(sdk): type-narrow manifest.files in pack staging root helper</li>
+    <li>**PR #95664** refactor(plugins): move owner skills into plugins</li>
+    <li>**PR #95299** fix #95248: OpenClaw release_lane is a no-op when claim is held by a live worker; stuck Telegram inbound events block agent response until gateway restart. and @kriegerbangerz-ship-it</li>
+    <li>**PR #94687** fix(gateway): accept port for health and probe. Related #79100. and @ozthedivine</li>
+    <li>**PR #95649** fix(ci): bundle test shards and right-size runners</li>
+    <li>**PR #95243** fix(docs): show inline read_when hints in docs:list. and @vincentkoc</li>
+    <li>**PR #95283** fix(openai-completions): seal native reasoning before the answer under /reasoning on. Related #95280. and @vincentkoc and @Marvinthebored</li>
+    <li>**PR #95497** feat(raft): add CLI wake bridge channel</li>
+    <li>**PR #95459** fix(cron): use main-session systemEvent for silent quick-create preset. Related #95073. and @vincentkoc and @vporton</li>
+    <li>**PR #95503** fix #89466: [Bug]: Control UI chat input text not cleared after sending. and @vincentkoc and @zhong18804784882</li>
+    <li>**PR #95684** fix(skills): harden ClawHub update policy</li>
+    <li>**PR #95683** feat(plugins): externalize additional official plugins</li>
+    <li>**PR #95681** fix(ci): debounce canonical main runner admission</li>
+    <li>**PR #95652** fix(agents): activate selected harness plugins</li>
+    <li>**PR #95404** fix(codex): stream non-final-answer assistant deltas as partials. Related #95422. and @vincentkoc</li>
     </ul>
   </div>
   <!-- RELEASE_END -->
