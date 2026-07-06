@@ -196,7 +196,13 @@ describe("qa scenario catalog", () => {
 
     expect(scenarios.map((scenario) => scenario.id).toSorted()).toEqual([
       "kitchen-sink-live-openai",
+      "matrix-post-restart-room-continue",
+      "matrix-restart-replay-dedupe",
+      "matrix-restart-resume",
+      "slack-restart-resume",
       "subagent-stale-child-links",
+      "telegram-repeated-command-authorization",
+      "whatsapp-restart-resume",
     ]);
     expect(
       scenarios
