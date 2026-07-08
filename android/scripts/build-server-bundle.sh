@@ -1,32 +1,12 @@
 #!/usr/bin/env bash
-#
-# Build the codex-web-local frontend and CLI, then copy them into
-# APK assets so they can optionally be deployed without npm install.
-#
-# Usage:
-#   ./scripts/build-server-bundle.sh
-#
-# Prerequisites:
-#   - Node.js and npm installed on the build machine
-#   - Run from the android/ directory OR the project root
-
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ANDROID_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_ROOT="$(dirname "$ANDROID_DIR")"
-
-ASSETS_DIR="$ANDROID_DIR/app/src/main/assets/server-bundle"
 
 echo "=== Building codex-web-local ==="
 
-cd "$PROJECT_ROOT"
-
-# Install dependencies if needed
-if [ ! -d "node_modules" ]; then
-    echo "Installing npm dependencies..."
-    npm install
-fi
+# Get absolute path of project root
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+ANDROID_DIR="$PROJECT_ROOT/android"
+ASSETS_DIR="$ANDROID_DIR/app/src/main/assets/server-bundle"
 
 # Build frontend (Vue) and CLI (Express server)
 echo "Building frontend..."
@@ -51,7 +31,5 @@ cd "$ASSETS_DIR"
 npm install --omit=dev --ignore-scripts 2>/dev/null || true
 cd "$PROJECT_ROOT"
 
-echo ""
 echo "=== Server bundle ready ==="
 echo "Location: $ASSETS_DIR"
-du -sh "$ASSETS_DIR" 2>/dev/null || true
