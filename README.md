@@ -304,3 +304,4 @@ clawcode-android/                     # Claw Code / OpenClaude (Python + Rust)
 </div>
 
 [Download APK](https://friuns2.github.io/openclaw-android-assistant/) · [Google Play](https://play.google.com/store/apps/details?id=gptos.intelligence.assistant&hl=en) · [OpenClaw Docs](https://docs.openclaw.ai) · [Project Spec](PROJECT_SPEC.md)
+FIXED: Workflow now triggers on push
