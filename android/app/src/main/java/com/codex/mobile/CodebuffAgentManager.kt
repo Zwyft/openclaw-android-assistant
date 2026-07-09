@@ -90,7 +90,8 @@ class CodebuffAgentManager(private val context: Context) {
     fun sendTask(agentId: String, task: String): String? {
         // In a real implementation, this would send data via stdout/stderr
         // For now, return a placeholder response
-        Log.d(TAG, "Sending task to agent ${agentId}: $task")\n        // TODO: Implement actual inter-process communication
+        Log.d(TAG, "Sending task to agent ${agentId}: $task")
+        // TODO: Implement actual inter-process communication
         return "Task received by agent ${agentId}"
     }
 
