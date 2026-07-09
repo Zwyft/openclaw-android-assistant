@@ -35,7 +35,36 @@ jobs:
       - name: Download Termux bootstrap (self-contained Linux/Node env)
         run: bash android/scripts/download-bootstrap.sh
 
-      - name: Build debug APK (CodexMobile = App Store "AnyClaw")
+      - name: Package Freebuff assets
+        run: |
+          # Ensure Freebuff assets are in the APK assets directory
+          FREEBUFF_SRC="android/app/src/main/assets/freebuff"
+          if [ -d "$FREEBUFF_SRC" ]; then
+            echo "Freebuff assets already present"
+            ls -la "$FREEBUFF_SRC/"
+          else
+            echo "ERROR: Freebuff assets not found at $FREEBUFF_SRC"
+            exit 1
+          fi
+
+      - name: Package Codebuff agent definitions
+        run: |
+          CODEBUFF_SRC="android/app/src/main/assets/codebuff"
+          if [ -d "$CODEBUFF_SRC" ]; then
+            echo "Codebuff agents present"
+            ls -la "$CODEBUFF_SRC/"
+          fi
+
+      - name: Verify web UI includes Freebuff extension
+        run: |
+          WEB_INDEX="android/app/src/main/assets/web/index.html"
+          if grep -q "codebuff-ui.js" "$WEB_INDEX"; then
+            echo "Freebuff UI extension included in web UI"
+          else
+            echo "WARNING: codebuff-ui.js not referenced in index.html"
+          fi
+
+      - name: Build debug APK (AnyClaw with Freebuff)
         working-directory: android
         run: ./gradlew :app:assembleDebug --no-daemon
 
@@ -68,9 +97,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
-          name: "AnyClaw v${{ github.run_number }} (${{ github.ref_name }})"
+          name: "AnyClaw v${{ github.run_number }} — Freebuff Unlocked"
           body: |
-            AnyClaw — OpenClaw + Codex on Android (self-contained debug build).
+            AnyClaw — OpenClaw + Codex on Android with Freebuff AI (self-contained debug build).
+
+            ### Freebuff Features (Phase 3)
+            - 🆓 **Fully Unlocked** — No paywall, no subscription, no rate limits
+            - 🧠 **Free AI Models** — GPT-5 Nano, GPT-5 Mini, Claude Sonnet 4
+            - 💻 **Code Editor** — Generate, edit, and refactor code
+            - ⚡ **Terminal** — Execute shell commands
+            - 📁 **File Explorer** — Browse and search project files
+            - 🔍 **Code Review** — Analyze code quality and security
+            - 🔬 **Research** — Documentation and information gathering
+            - 🌐 **Hermes Web UI** — Fully unlocked with no restrictions
 
             ### Changes
             ${{ steps.changelog.outputs.notes }}

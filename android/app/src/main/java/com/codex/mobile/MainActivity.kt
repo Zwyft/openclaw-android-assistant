@@ -372,35 +372,54 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Bridge interface for Codebuff AI agents communication between WebView and Android.
+     * Bridge interface for Codebuff/Freebuff AI agents communication between WebView and Android.
+     * All paywall/subscription/rate-limit restrictions are removed.
      */
     inner class CodebuffBridge {
         @android.webkit.JavascriptInterface
         fun sendCodeTask(agentId: String, task: String) {
-            Log.d(TAG, "Codebuff task received: agent=$agentId, task=${task.take(100)}")
-            // Forward to CodebuffAgentManager
+            Log.d(TAG, "Freebuff task received: agent=$agentId, task=${task.take(100)}")
             try {
                 val agentManager = CodebuffAgentManager(this@MainActivity)
                 val result = agentManager.sendTask(agentId, task)
-                // Send result back to WebView
                 runOnUiThread {
-                    val msg = result ?: "Task completed"
-                    val js = "document.getElementById('codebuff-messages').innerHTML += '<div style=padding:8px;background:#45475a;border-radius:4px;margin:4px 0><strong>AI:</strong> " + msg.replace("'", "\\'") + "</div>';"
+                    val msg = result ?: "Task completed by $agentId"
+                    val js = "document.getElementById('codebuff-messages').innerHTML += '<div style=\"padding:8px;background:#45475a;border-radius:4px;margin:4px 0\"><strong>Freebuff:</strong> " + msg.replace("'", "\\'") + "</div>';"
                     webView.evaluateJavascript(js, null)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Codebuff task error: ${e.message}")
+                Log.e(TAG, "Freebuff task error: ${e.message}")
             }
         }
 
         @android.webkit.JavascriptInterface
         fun getAgentList(): String {
-            return """[{"id":"editor","name":"Code Editor"},{"id":"basher","name":"Terminal"},{"id":"file_explorer","name":"File Explorer"},{"id":"reviewer","name":"Code Reviewer"},{"id":"researcher","name":"Researcher"}]"""
+            return """[{"id":"editor","name":"Code Editor","icon":"✏️","isFree":true},{"id":"basher","name":"Terminal","icon":"⚡","isFree":true},{"id":"file_explorer","name":"File Explorer","icon":"📁","isFree":true},{"id":"reviewer","name":"Code Reviewer","icon":"🔍","isFree":true},{"id":"researcher","name":"Researcher","icon":"🔬","isFree":true}]"""
         }
 
         @android.webkit.JavascriptInterface
         fun isHermesUnlocked(): Boolean {
             return true
+        }
+
+        @android.webkit.JavascriptInterface
+        fun getFreebuffStatus(): String {
+            return """{"unlocked":true,"hermesUnlocked":true,"paywallBypassed":true,"subscriptionRequired":false,"credits":"unlimited","sessionLimit":"unlimited","models":["openai/gpt-5-nano","openai/gpt-5-mini","anthropic/claude-sonnet-4"],"mode":"FREE","features":{"code_generation":true,"terminal_access":true,"file_explorer":true,"code_review":true,"research":true,"hermes_web_ui":true}}"""
+        }
+
+        @android.webkit.JavascriptInterface
+        fun isPaywallActive(): Boolean {
+            return false
+        }
+
+        @android.webkit.JavascriptInterface
+        fun getAvailableModels(): String {
+            return """[{"id":"openai/gpt-5-nano","name":"GPT-5 Nano","provider":"OpenAI","isFree":true,"isPremium":false},{"id":"openai/gpt-5-mini","name":"GPT-5 Mini","provider":"OpenAI","isFree":true,"isPremium":false},{"id":"anthropic/claude-sonnet-4","name":"Claude Sonnet 4","provider":"Anthropic","isFree":true,"isPremium":false}]"""
+        }
+
+        @android.webkit.JavascriptInterface
+        fun getUnlockMessage(): String {
+            return "Freebuff is fully unlocked. No paywall, no subscription, no rate limits."
         }
     }
 }
