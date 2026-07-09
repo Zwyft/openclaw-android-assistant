@@ -1,92 +1,139 @@
-# AnyClaw (Android)
+# AnyClaw Android Assistant
 
-Android APK that embeds a Termux-style Linux bootstrap environment, installs OpenClaw + Codex on first run, and presents the AnyClaw UI inside a WebView.
+**AI-powered coding assistant for Android** — Freebuff integrated, Hermes Web UI unlocked.
+
+## Quick Start
+
+### Download APK
+1. Visit [GitHub Actions](https://github.com/Zwyft/openclaw-android-assistant/actions)
+2. Click latest successful build
+3. Download `anyclaw` artifact
+4. Install on Android device
+
+### First Launch
+- App will download ~500MB environment (first run only)
+- Complete OAuth login when prompted
+- Start using AI coding agents
+
+## Features
+
+### Freebuff AI (Unlocked)
+- ✏️ **Code Editor** — Generate and refactor code
+- ⚡ **Terminal** — Execute shell commands
+- 📁 **File Explorer** — Browse project files
+- 🔍 **Code Review** — Quality and security analysis
+- 🔬 **Research** — Documentation lookup
+
+### Hermes Web UI
+- Fully unlocked (no paywall)
+- Free AI models: GPT-5 Nano, GPT-5 Mini, Claude Sonnet 4
+- Unlimited sessions, no rate limits
+
+## Build from Source
+
+```bash
+# Prerequisites: JDK 17, Android SDK
+git clone https://github.com/Zwyft/openclaw-android-assistant.git
+cd openclaw-android-assistant/android
+./gradlew :app:assembleDebug
+
+# APK location:
+# app/build/outputs/apk/debug/anyclaw.apk
+```
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│              Android APK                │
-│                                         │
-│  ┌──────────────┐  ┌────────────────┐   │
-│  │   WebView    │  │  Bootstrap     │   │
-│  │              │  │  Installer     │   │
-│  │ localhost:   │  │                │   │
-│  │   18923      │  │  Extracts      │   │
-│  │              │  │  Termux env    │   │
-│  └──────┬───────┘  └───────┬────────┘   │
-│         │                  │            │
-│         ▼                  ▼            │
-│  ┌──────────────────────────────────┐   │
-│  │    /data/data/com.codex.mobile/  │   │
-│  │    files/usr/  (Termux prefix)   │   │
-│  │                                  │   │
-│  │    ├── bin/node                   │   │
-│  │    ├── bin/codex                  │   │
-│  │    └── lib/node_modules/         │   │
-│  │        └── codex-web-local/      │   │
-│  │            ├── dist/      (Vue)  │   │
-│  │            └── dist-cli/  (srv)  │   │
-│  └──────────────────────────────────┘   │
-└─────────────────────────────────────────┘
+android/
+├── app/
+│   ├── src/main/
+│   │   ├── java/com/codex/mobile/
+│   │   │   ├── MainActivity.kt
+│   │   │   ├── CodexServerManager.kt
+│   │   │   ├── AuthCallbackServer.kt
+│   │   │   └── CodebuffAgentManager.kt
+│   │   └── assets/
+│   │       ├── bootstrap/ (Termux Linux env)
+│   │       ├── codebuff/ (AI agents)
+│   │       ├── freebuff/ (Unlocked config)
+│   │       └── web/ (Vue.js UI)
+│   └── build.gradle.kts
+└── scripts/
+    └── download-bootstrap.sh
 ```
 
-## Prerequisites
+## Troubleshooting
 
-- Android Studio (or just the Android SDK command-line tools)
-- Java 17+
-- curl (for downloading bootstrap)
+### Login Issues
+- **Browser doesn't open**: Check default browser settings
+- **Redirect fails**: Use API key fallback option
+- **"Not logged in"**: Restart app and try again
 
-## Build Instructions
+### Build Errors
+- **Gradle sync failed**: Ensure JDK 17 is installed
+- **Bootstrap download fails**: Check network connection
+- **Out of space**: Free up 2GB+ storage
 
-### 1. Download the Termux bootstrap
+### Runtime Issues
+- **App crashes on startup**: Clear app data and reinstall
+- **Slow performance**: Close background apps
+- **Battery drain**: Normal during initial setup
 
+## Technical Details
+
+### Permissions
+- `INTERNET` — API calls and OAuth
+- `FOREGROUND_SERVICE` — Background Codex server
+- `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` — Persistent server
+- `WAKE_LOCK` — Keep server running
+
+### Ports Used
+- `18923` — Codex web server
+- `18924` — CONNECT proxy
+- `18925` — OAuth callback server
+- `18789` — OpenClaw gateway
+- `19001` — OpenClaw control UI
+
+### Storage Requirements
+- Initial download: ~500MB
+- Full installation: ~2GB
+- APK size: ~36MB
+
+## Development
+
+### Debugging
 ```bash
-cd android
-./scripts/download-bootstrap.sh
+# View logs
+adb logcat | grep -i "codex\|anyclaw"
+
+# Install debug APK
+adb install -r app/build/outputs/apk/debug/anyclaw.apk
+
+# Launch app
+adb shell am start -n com.codex.mobile/.MainActivity
 ```
 
-This downloads `bootstrap-aarch64.zip` (~30 MB) from Termux releases into `app/src/main/assets/`.
-
-### 2. (Optional) Bundle the server
-
-If you want to pre-bundle the codex-web-local server in the APK so users don't need to `npm install` it on first run:
-
+### Modifying Web UI
 ```bash
-./scripts/build-server-bundle.sh
+# Web UI sources
+android/app/src/main/assets/web/
+
+# After changes, rebuild APK
+./gradlew :app:assembleDebug
 ```
 
-This builds the Vue frontend + Express CLI from the parent project and copies them into `app/src/main/assets/server-bundle/`.
+### Adding AI Agents
+1. Add agent definition to `assets/codebuff/agents/`
+2. Update `agent-launcher.js` registry
+3. Rebuild APK
 
-### 3. Build the APK
+## License
 
-```bash
-./gradlew assembleDebug
-```
+See root `LICENSE` file. This project combines multiple open source components.
 
-The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
+## Acknowledgments
 
-For a release build:
-
-```bash
-./gradlew assembleRelease
-```
-
-## First Run
-
-On first launch, the app will:
-
-1. Extract the bootstrap environment (~30 MB compressed, ~100 MB extracted)
-2. Run `apt-get install nodejs-lts` (downloads ~30 MB)
-3. Run `npm install -g @openai/codex codex-web-local`
-4. Prompt for your OpenAI API key (stored encrypted on device)
-5. Start the server and load the WebView
-
-Steps 1-3 only happen once. Subsequent launches skip straight to step 4-5.
-
-## Minimum Requirements
-
-- Android 7.0 (API 24) or higher
-- arm64-v8a device (most modern Android phones)
-- ~500 MB free storage for bootstrap + Node.js + Codex
-- Internet connection (for API calls and first-run package installs)
+- OpenClaw Android Assistant (base project)
+- Codebuff/Freebuff (AI integration)
+- Termux (Linux environment)
+- OpenAI (Codex CLI)

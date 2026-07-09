@@ -3,6 +3,7 @@ name: Build APK
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 permissions:
@@ -35,47 +36,54 @@ jobs:
       - name: Download Termux bootstrap (self-contained Linux/Node env)
         run: bash android/scripts/download-bootstrap.sh
 
-      - name: Package Freebuff assets
+      - name: Verify Freebuff assets
         run: |
-          # Ensure Freebuff assets are in the APK assets directory
-          FREEBUFF_SRC="android/app/src/main/assets/freebuff"
-          if [ -d "$FREEBUFF_SRC" ]; then
-            echo "Freebuff assets already present"
-            ls -la "$FREEBUFF_SRC/"
+          echo "=== Freebuff Integration Check ==="
+          FREEBUFF_DIR="android/app/src/main/assets/freebuff"
+          if [ -d "$FREEBUFF_DIR" ]; then
+            echo "✓ Freebuff directory exists"
+            ls -la "$FREEBUFF_DIR/"
           else
-            echo "ERROR: Freebuff assets not found at $FREEBUFF_SRC"
+            echo "✗ Freebuff directory missing"
             exit 1
           fi
-
-      - name: Package Codebuff agent definitions
-        run: |
-          CODEBUFF_SRC="android/app/src/main/assets/codebuff"
-          if [ -d "$CODEBUFF_SRC" ]; then
-            echo "Codebuff agents present"
-            ls -la "$CODEBUFF_SRC/"
+          
+          echo ""
+          echo "=== Codebuff Agents Check ==="
+          CODEBUFF_DIR="android/app/src/main/assets/codebuff"
+          if [ -d "$CODEBUFF_DIR" ]; then
+            echo "✓ Codebuff agents present"
+            ls "$CODEBUFF_DIR/" | head -10
           fi
-
-      - name: Verify web UI includes Freebuff extension
-        run: |
-          WEB_INDEX="android/app/src/main/assets/web/index.html"
-          if grep -q "codebuff-ui.js" "$WEB_INDEX"; then
-            echo "Freebuff UI extension included in web UI"
-          else
-            echo "WARNING: codebuff-ui.js not referenced in index.html"
+          
+          echo ""
+          echo "=== Web UI Check ==="
+          if grep -q "codebuff-ui.js" android/app/src/main/assets/web/index.html; then
+            echo "✓ Freebuff UI extension included"
           fi
 
       - name: Build debug APK (AnyClaw with Freebuff)
         working-directory: android
         run: ./gradlew :app:assembleDebug --no-daemon
 
-      - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/anyclaw.apk
+      - name: Verify APK output
+        run: |
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ -f "$APK_PATH" ]; then
+            echo "✓ APK built successfully"
+            ls -lh "$APK_PATH"
+            cp "$APK_PATH" android/app/build/outputs/apk/debug/anyclaw.apk
+          else
+            echo "✗ APK build failed"
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: anyclaw
           path: android/app/build/outputs/apk/debug/anyclaw.apk
+          retention-days: 30
 
       - name: Generate changelog
         id: changelog
@@ -92,31 +100,55 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Determine release type
+        id: release_type
+        run: |
+          if [[ ${{ github.ref }} == refs/tags/v* ]]; then
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          else
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: "AnyClaw v${{ github.run_number }} — Freebuff Unlocked"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', github.run_number) }}
+          name: "AnyClaw v${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || github.run_number }} — Freebuff Unlocked"
           body: |
-            AnyClaw — OpenClaw + Codex on Android with Freebuff AI (self-contained debug build).
-
-            ### Freebuff Features (Phase 3)
-            - 🆓 **Fully Unlocked** — No paywall, no subscription, no rate limits
-            - 🧠 **Free AI Models** — GPT-5 Nano, GPT-5 Mini, Claude Sonnet 4
-            - 💻 **Code Editor** — Generate, edit, and refactor code
-            - ⚡ **Terminal** — Execute shell commands
-            - 📁 **File Explorer** — Browse and search project files
-            - 🔍 **Code Review** — Analyze code quality and security
-            - 🔬 **Research** — Documentation and information gathering
-            - 🌐 **Hermes Web UI** — Fully unlocked with no restrictions
-
-            ### Changes
+            ## AnyClaw Android Assistant
+            
+            AI-powered coding assistant with **Freebuff** integration — fully unlocked, no paywall.
+            
+            ### Features
+            - 🆓 **Freebuff AI** — Unlimited sessions, no subscription
+            - 🧠 **Free Models** — GPT-5 Nano, GPT-5 Mini, Claude Sonnet 4
+            - 💻 **5 AI Agents** — Editor, Terminal, Files, Review, Research
+            - 🌐 **Hermes UI** — Fully unlocked web interface
+            - 🔐 **OAuth Login** — Automatic redirect handling
+            
+            ### Changes in This Build
             ${{ steps.changelog.outputs.notes }}
-
+            
+            ### Installation
+            1. Download the `anyclaw` artifact below
+            2. Install on Android device (enable "Install from unknown sources")
+            3. Open app and complete OAuth login
+            4. Start using AI coding agents
+            
+            ### Technical Details
+            - **APK Size**: ~36 MB
+            - **First Run**: Downloads ~500 MB environment
+            - **Total Storage**: ~2 GB required
+            - **Android Version**: 8.0+ recommended
+            
             ---
             Branch: ${{ github.ref_name }}
-            Built from commit ${{ github.sha }}
+            Commit: ${{ github.sha }}
+            Build: ${{ github.run_number }}
           files: android/app/build/outputs/apk/debug/anyclaw.apk
           draft: false
-          prerelease: true
+          prerelease: ${{ steps.release_type.outputs.prerelease }}
+          generate_release_notes: false
