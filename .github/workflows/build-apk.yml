@@ -32,16 +32,62 @@ jobs:
         working-directory: apps/android
         run: chmod +x ./gradlew
 
-      - name: Build debug APK (thirdParty flavor)
+      - name: Build debug APK
         working-directory: apps/android
-        run: ./gradlew assembleThirdPartyDebug --no-daemon
+        run: ./gradlew :app:assembleThirdPartyDebug --no-daemon --stacktrace
 
-      - name: Rename APK
-        run: cp apps/android/app/build/outputs/apk/thirdParty/debug/app-thirdParty-debug.apk apps/android/app/build/outputs/apk/thirdParty/debug/anyclaw.apk
+      - name: Locate and rename APK
+        run: |
+          APK=$(find apps/android -name "*.apk" -print -quit)
+          if [ -z "$APK" ]; then
+            echo "No APK found after build!"
+            find apps/android -name "*.apk" -type f 2>/dev/null || echo "No APK anywhere"
+            exit 1
+          fi
+          echo "Found APK: $APK"
+          mkdir -p apps/android/app/build/outputs/apk
+          cp "$APK" apps/android/app/build/outputs/apk/anyclaw-debug.apk
+          echo "APK_PATH=$APK" >> $GITHUB_ENV
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: anyclaw-debug
-          path: apps/android/app/build/outputs/apk/thirdParty/debug/anyclaw.apk
+          path: apps/android/app/build/outputs/apk/anyclaw-debug.apk
           if-no-files-found: error
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git tag --sort=-v:refname | head -1)
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log "$PREV_TAG"..HEAD --pretty=format:"- %s" --reverse)
+          else
+            CHANGES=$(git log --pretty=format:"- %s" --reverse -10)
+          fi
+          {
+            echo "notes<<CHANGELOG_EOF"
+            echo "$CHANGES"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: "AnyClaw v${{ github.run_number }} (${{ github.ref_name }})"
+          body: |
+            🦞 **AnyClaw** — OpenClaw + Codex on Android
+
+            📱 Debug APK for install on ARM64 Android 7.0+
+
+            ### Changes
+            ${{ steps.changelog.outputs.notes }}
+
+            ---
+            Branch: ${{ github.ref_name }}
+            Built from commit ${{ github.sha }}
+          files: apps/android/app/build/outputs/apk/anyclaw-debug.apk
+          draft: false
+          prerelease: false
