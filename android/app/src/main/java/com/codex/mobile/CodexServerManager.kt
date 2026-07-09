@@ -3,6 +3,7 @@ package com.codex.mobile
 import android.content.Context
 import android.util.Log
 import java.io.BufferedReader
+import java.io.OutputStreamWriter
 import java.io.File
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
@@ -27,6 +28,7 @@ class CodexServerManager(private val context: Context) {
 
     private var serverProcess: Process? = null
     private var proxyProcess: Process? = null
+    private var authCallbackServer: AuthCallbackServer? = null
     private var openClawGatewayProcess: Process? = null
     private var openClawControlUiProcess: Process? = null
 
@@ -1218,6 +1220,25 @@ WEOF
         env["HTTPS_PROXY"] = "http://127.0.0.1:$PROXY_PORT"
         env["HTTP_PROXY"] = "http://127.0.0.1:$PROXY_PORT"
 
+        // Start our own callback server to catch the OAuth redirect
+        val callbackPort = 18925
+        val callbackUrl = "http://127.0.0.1:$callbackPort/callback"
+
+        var authReceived = false
+        var authCode: String? = null
+        var authState: String? = null
+        val lock = Object()
+
+        authCallbackServer = AuthCallbackServer(callbackPort) { code, state ->
+            synchronized(lock) {
+                authReceived = true
+                authCode = code
+                authState = state
+                lock.notifyAll()
+            }
+        }
+        authCallbackServer?.start()
+
         val pb = ProcessBuilder(codexBinPath(), "login")
         pb.environment().clear()
         pb.environment().putAll(env)
@@ -1237,15 +1258,30 @@ WEOF
             onProgress(clean)
 
             if (!urlSent) {
-                urlRegex.find(clean)?.let {
-                    onLoginUrl(it.value)
+                urlRegex.find(clean)?.let { match ->
+                    val url = match.value
+                    // Replace the redirect_uri with our callback server URL
+                    val modifiedUrl = url.replace(
+                        Regex("redirect_uri=[^&]+"),
+                        "redirect_uri=$callbackUrl"
+                    )
+                    onLoginUrl(modifiedUrl)
                     urlSent = true
+                    onProgress("Browser opened. Waiting for login...")
                 }
             }
 
             line = reader.readLine()
         }
 
+        // Wait for auth callback if we haven't received it yet
+        if (!authReceived) {
+            synchronized(lock) {
+                lock.wait(300_000) // 5 minutes timeout
+            }
+        }
+
+        authCallbackServer?.stop()
         val exitCode = proc.waitFor()
         Log.i(TAG, "codex login exited with code $exitCode")
         return exitCode == 0
