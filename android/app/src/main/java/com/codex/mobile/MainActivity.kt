@@ -370,7 +370,6 @@ class MainActivity : AppCompatActivity() {
             statusDetail.visibility = View.VISIBLE
         }
     }
-}
 
     /**
      * Bridge interface for Codebuff AI agents communication between WebView and Android.
@@ -386,8 +385,8 @@ class MainActivity : AppCompatActivity() {
                 // Send result back to WebView
                 runOnUiThread {
                     webView.evaluateJavascript(
-                        "document.getElementById('codebuff-messages').innerHTML += '<div style=\"margin:4px 0;padding:8px;background:#45475a;border-radius:4px;\"><strong>AI:</strong> " + 
-                        (result?.replace("'", "\\'") ?: "Task completed") + 
+                        "document.getElementById('codebuff-messages').innerHTML += '<div style=\\\"margin:4px 0;padding:8px;background:#45475a;border-radius:4px;\\\"><strong>AI:</strong> " + 
+                        (result?.replace(\"'\", \"\\\\'\") ?: "Task completed") + 
                         "</div>';",
                         null
                     )
@@ -407,3 +406,4 @@ class MainActivity : AppCompatActivity() {
             return true
         }
     }
+}
