@@ -1211,6 +1211,12 @@ WEOF
      * stdout and calls [onLoginUrl] so the Activity can open the browser.
      * Blocks until login completes or fails.
      */
+    /**
+     * Run browser-based OAuth login via codex login.
+     * Opens auth URL in browser, captures the URL, and returns it.
+     * The caller should open this URL. After browser login completes,
+     * the codex process will exit with success.
+     */
     fun loginWithUrl(
         onLoginUrl: (url: String) -> Unit,
         onProgress: (String) -> Unit,
@@ -1238,24 +1244,22 @@ WEOF
             Log.d(TAG, "[login] $clean")
             onProgress(clean)
 
-            // Look for any URL that looks like an auth URL
             if (!urlFound) {
-                val urlMatch = Regex("""(https://[^\s]+)""").find(clean)
-                if (urlMatch != null && urlMatch.value.contains("auth")) {
-                    onLoginUrl(urlMatch.value)
-                    urlFound = true
-                    onProgress(" ")
-                    onProgress("If browser login doesn't work:")
-                    onProgress("1. Copy URL and paste in browser manually")
-                    onProgress("2. After login, return to app or use API key")
-                    onProgress(" ")
+                // Match any URL in the output that looks like an auth URL
+                val urlPattern = Regex("""(https?://[^\s]+)""")
+                val urlMatch = urlPattern.find(clean)
+                if (urlMatch != null) {
+                    val url = urlMatch.value
+                    if (url.contains("auth") || url.contains("openai") || url.contains("login")) {
+                        onLoginUrl(url)
+                        urlFound = true
+                        onProgress("Browser login opened. If redirect fails, use API key option.")
+                    }
                 }
             }
 
-            // Check for login completion indicators
             if (clean.contains("Logged in", ignoreCase = true) ||
-                clean.contains("Authentication successful", ignoreCase = true) ||
-                clean.contains("Success", ignoreCase = true)) {
+                clean.contains("Authentication successful", ignoreCase = true)) {
                 loginComplete = true
             }
 
@@ -1263,8 +1267,42 @@ WEOF
         }
 
         val exitCode = proc.waitFor()
-        Log.i(TAG, "codex login exited with code $exitCode")
+        Log.i(TAG, "codex login exited with code $exitCode, loginComplete=$loginComplete")
         return exitCode == 0 || loginComplete
+    }
+
+    /**
+     * Write OpenAI API key directly to the Codex auth config file.
+     * This bypasses the OAuth flow entirely and is the most reliable
+     * way to authenticate on Android where OAuth redirects don't work.
+     */
+    fun writeApiKeyToConfig(apiKey: String): Boolean {
+        return try {
+            val paths = BootstrapInstaller.getPaths(context)
+            val configDir = File(paths.homeDir, ".codex")
+            configDir.mkdirs()
+
+            // Codex stores auth token in auth.json
+            val authFile = File(configDir, "auth.json")
+            val authContent = """{"token":"$apiKey","type":"api_key"}"""
+            authFile.writeText(authContent)
+            Log.i(TAG, "Wrote API key to auth config")
+
+            // Also set via codex config
+            val env = buildEnvironment(paths)
+            val pb = ProcessBuilder(codexBinPath(), "config", "set", "api_key=" + apiKey)
+            pb.environment().clear()
+            pb.environment().putAll(env)
+            pb.directory(File(paths.homeDir))
+            pb.redirectErrorStream(true)
+            val proc = pb.start()
+            proc.waitFor()
+
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write API key: ${e.message}")
+            false
+        }
     }
 
     // ── Health check ────────────────────────────────────────────────────────

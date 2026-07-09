@@ -236,31 +236,31 @@ class MainActivity : AppCompatActivity() {
             throw RuntimeException("Failed to start network proxy")
         }
 
-        // Step 5: Authenticate via `codex login`
+        // Step 5: Authenticate via API key (primary method for Android)
         updateStatus("Checking authentication…")
         if (!serverManager.isLoggedIn()) {
-            updateStatus("Login required — opening browser…")
-            val authOk = serverManager.loginWithUrl(
-                onLoginUrl = { url ->
-                    runOnUiThread {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }
-                },
-                onProgress = { msg -> updateDetail(msg) },
-            )
-            if (!authOk && !serverManager.isLoggedIn()) {
-                updateStatus("Browser login failed — enter API key manually")
-                val apiKey = requestApiKey()
-                if (apiKey.isBlank()) {
-                    throw RuntimeException("No API key provided")
-                }
-                val loginOk = serverManager.loginWithApiKey(apiKey)
-                if (!loginOk) {
-                    throw RuntimeException("Login failed — check your API key")
-                }
+            updateStatus("Login required")
+            updateDetail("Enter your OpenAI API key to continue")
+            
+            val apiKey = requestApiKey()
+            if (apiKey.isBlank()) {
+                throw RuntimeException("No API key provided")
             }
+            
+            updateDetail("Saving API key...")
+            val configOk = serverManager.writeApiKeyToConfig(apiKey)
+            if (!configOk) {
+                updateDetail("Config write failed, trying alternative method...")
+            }
+            
+            updateDetail("Verifying API key...")
+            val loginOk = serverManager.loginWithApiKey(apiKey)
+            if (!loginOk && !serverManager.isLoggedIn()) {
+                throw RuntimeException("Login failed — check your API key")
+            }
+            updateDetail("API key verified successfully!")
         }
-        updateStatus("Authenticated")
+        updateStatus("Authenticated ✓")
 
         // Step 6: Health check
         updateStatus("Verifying API access…", "Sending test message")
