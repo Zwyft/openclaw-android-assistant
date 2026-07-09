@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import java.io.File
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
