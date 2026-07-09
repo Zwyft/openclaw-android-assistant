@@ -2,6 +2,7 @@ package com.codex.mobile
 
 import android.content.Context
 import android.util.Log
+import java.io.File
 
 /**
  * Manages Codebuff agents within the embedded Linux environment.
@@ -66,8 +67,8 @@ class CodebuffAgentManager(private val context: Context) {
 
         // Prepare process builder
         val processBuilder = ProcessBuilder(
-            paths.prefixDir.resolve("bin/node").absolutePath,
-            paths.prefixDir.resolve("codebuff/agent-launcher.js").absolutePath
+            File(paths.prefixDir, "bin/node").absolutePath,
+            File(paths.prefixDir, "codebuff/agent-launcher.js").absolutePath
         )
 
         // Configure environment and working directory
@@ -121,10 +122,10 @@ class CodebuffAgentManager(private val context: Context) {
             process.destroyForcibly()
             codebuffProcesses.remove(agentId)
             Log.d(TAG, "Terminated Codebuff agent: ${agentId}")
-            true
+            return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to terminate agent ${agentId}: ${e.message}", e)
-            false
+            return false
         }
     }
 
