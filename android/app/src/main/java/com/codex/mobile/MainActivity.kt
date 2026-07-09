@@ -384,12 +384,9 @@ class MainActivity : AppCompatActivity() {
                 val result = agentManager.sendTask(agentId, task)
                 // Send result back to WebView
                 runOnUiThread {
-                    webView.evaluateJavascript(
-                        "document.getElementById('codebuff-messages').innerHTML += '<div style=\\\"margin:4px 0;padding:8px;background:#45475a;border-radius:4px;\\\"><strong>AI:</strong> " + 
-                        (result?.replace(\"'\", \"\\\\'\") ?: "Task completed") + 
-                        "</div>';",
-                        null
-                    )
+                    val msg = result ?: "Task completed"
+                    val js = "document.getElementById('codebuff-messages').innerHTML += '<div style=padding:8px;background:#45475a;border-radius:4px;margin:4px 0><strong>AI:</strong> " + msg.replace("'", "\\'") + "</div>';"
+                    webView.evaluateJavascript(js, null)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Codebuff task error: ${e.message}")
