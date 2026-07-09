@@ -107,6 +107,8 @@ class MainActivity : AppCompatActivity() {
             ): Boolean = false
         }
 
+        webView.addJavascriptInterface(CodebuffBridge(), "AndroidBridge")
+
         webView.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
                 Log.d(TAG, "[WebView] ${msg.sourceId()}:${msg.lineNumber()} ${msg.message()}")
@@ -369,3 +371,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
+    /**
+     * Bridge interface for Codebuff AI agents communication between WebView and Android.
+     */
+    inner class CodebuffBridge {
+        @android.webkit.JavascriptInterface
+        fun sendCodeTask(agentId: String, task: String) {
+            Log.d(TAG, "Codebuff task received: agent=$agentId, task=${task.take(100)}")
+            // Forward to CodebuffAgentManager
+            try {
+                val agentManager = CodebuffAgentManager(this@MainActivity)
+                val result = agentManager.sendTask(agentId, task)
+                // Send result back to WebView
+                runOnUiThread {
+                    webView.evaluateJavascript(
+                        "document.getElementById('codebuff-messages').innerHTML += '<div style=\"margin:4px 0;padding:8px;background:#45475a;border-radius:4px;\"><strong>AI:</strong> " + 
+                        (result?.replace("'", "\\'") ?: "Task completed") + 
+                        "</div>';",
+                        null
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Codebuff task error: ${e.message}")
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun getAgentList(): String {
+            return """[{"id":"editor","name":"Code Editor"},{"id":"basher","name":"Terminal"},{"id":"file_explorer","name":"File Explorer"},{"id":"reviewer","name":"Code Reviewer"},{"id":"researcher","name":"Researcher"}]"""
+        }
+
+        @android.webkit.JavascriptInterface
+        fun isHermesUnlocked(): Boolean {
+            return true
+        }
+    }

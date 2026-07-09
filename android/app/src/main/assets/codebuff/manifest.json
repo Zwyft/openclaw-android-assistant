@@ -1,0 +1,43 @@
+{
+  "name": "Codebuff AI Agents",
+  "version": "1.0.0",
+  "description": "Free AI coding assistant agents - no paywall, no subscription",
+  "agents": [
+    {
+      "id": "editor",
+      "name": "Code Editor",
+      "description": "Generate, edit, and refactor code",
+      "enabled": true
+    },
+    {
+      "id": "basher",
+      "name": "Terminal",
+      "description": "Execute shell commands",
+      "enabled": true
+    },
+    {
+      "id": "file_explorer",
+      "name": "File Explorer",
+      "description": "Browse and search project files",
+      "enabled": true
+    },
+    {
+      "id": "reviewer",
+      "name": "Code Reviewer",
+      "description": "Review code quality and security",
+      "enabled": true
+    },
+    {
+      "id": "researcher",
+      "name": "Researcher",
+      "description": "Research and gather information",
+      "enabled": true
+    }
+  ],
+  "features": {
+    "freeMode": true,
+    "noPaywall": true,
+    "noSubscription": true,
+    "localExecution": true
+  }
+}
