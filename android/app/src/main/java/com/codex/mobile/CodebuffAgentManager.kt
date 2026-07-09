@@ -140,7 +140,7 @@ class CodebuffAgentManager(private val context: Context) {
             } catch (_: IllegalThreadStateException) {
                 AgentStatus.RUNNING
             }
-        }
+        }.toMap()
     }
 
     // ============================================================================
