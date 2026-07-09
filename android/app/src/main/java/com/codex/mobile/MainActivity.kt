@@ -49,6 +49,19 @@ class MainActivity : AppCompatActivity() {
         startSetupFlow()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Handle OAuth redirect from codex login
+        val data = intent.data
+        if (data != null && data.scheme == "codex" && data.host == "auth") {
+            Log.d(TAG, "OAuth redirect received: $data")
+            // The codex login process should detect this via the local server
+            // For now, just log it and bring the app to foreground
+            updateStatus("Login redirect received, completing authentication...")
+        }
+        setIntent(intent)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         serverManager.stopServer()
