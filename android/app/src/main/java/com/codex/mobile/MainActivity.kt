@@ -239,42 +239,28 @@ class MainActivity : AppCompatActivity() {
         // Step 5: Authenticate via `codex login`
         updateStatus("Checking authentication…")
         if (!serverManager.isLoggedIn()) {
-            updateStatus("Login required")
-            updateDetail("Opening browser for OAuth...")
-            
-            var loginAttempted = false
+            updateStatus("Login required — opening browser…")
             val authOk = serverManager.loginWithUrl(
                 onLoginUrl = { url ->
-                    loginAttempted = true
                     runOnUiThread {
-                        updateDetail("Browser opened - please complete login")
-                        updateDetail("If login fails, you'll be prompted for API key")
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     }
                 },
-                onProgress = { msg -> 
-                    updateDetail(msg)
-                },
+                onProgress = { msg -> updateDetail(msg) },
             )
-            
             if (!authOk && !serverManager.isLoggedIn()) {
-                updateStatus("Login incomplete - enter API key")
-                updateDetail("OAuth may have failed or was cancelled")
+                updateStatus("Browser login failed — enter API key manually")
                 val apiKey = requestApiKey()
                 if (apiKey.isBlank()) {
                     throw RuntimeException("No API key provided")
                 }
-                updateDetail("Validating API key...")
                 val loginOk = serverManager.loginWithApiKey(apiKey)
                 if (!loginOk) {
                     throw RuntimeException("Login failed — check your API key")
                 }
-                updateDetail("API key login successful!")
-            } else {
-                updateDetail("Login completed successfully")
             }
         }
-        updateStatus("Authenticated ✓")
+        updateStatus("Authenticated")
 
         // Step 6: Health check
         updateStatus("Verifying API access…", "Sending test message")
