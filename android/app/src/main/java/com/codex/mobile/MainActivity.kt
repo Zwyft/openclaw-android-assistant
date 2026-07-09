@@ -236,39 +236,28 @@ class MainActivity : AppCompatActivity() {
             throw RuntimeException("Failed to start network proxy")
         }
 
-        // Step 5: Authenticate via `codex login`
+        // Step 5: Authentication (optional - configure in Settings later)
         updateStatus("Checking authentication…")
         if (!serverManager.isLoggedIn()) {
-            updateStatus("Login required — opening browser…")
-            val authOk = serverManager.loginWithUrl(
-                onLoginUrl = { url ->
-                    runOnUiThread {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }
-                },
-                onProgress = { msg -> updateDetail(msg) },
-            )
-            if (!authOk && !serverManager.isLoggedIn()) {
-                updateStatus("Browser login failed — enter API key manually")
-                val apiKey = requestApiKey()
-                if (apiKey.isBlank()) {
-                    throw RuntimeException("No API key provided")
-                }
-                val loginOk = serverManager.loginWithApiKey(apiKey)
-                if (!loginOk) {
-                    throw RuntimeException("Login failed — check your API key")
-                }
-            }
+            // Skip mandatory login - freebuff works without credentials
+            // OpenAI models will use free tier, user can configure keys in Settings
+            updateDetail("Login optional - configure in Settings anytime")
         }
-        updateStatus("Authenticated")
+        updateStatus("Ready")
 
-        // Step 6: Health check
-        updateStatus("Verifying API access…", "Sending test message")
-        val healthOk = serverManager.healthCheck { msg -> updateDetail(msg) }
-        if (!healthOk) {
-            throw RuntimeException("API health check failed — Codex could not reach OpenAI")
+        // Step 6: Health check (skip if no credentials)
+        updateStatus("Verifying setup…")
+        if (serverManager.isLoggedIn()) {
+            val healthOk = serverManager.healthCheck { msg -> updateDetail(msg) }
+            if (!healthOk) {
+                updateDetail("API check failed - you can configure keys in Settings")
+            } else {
+                updateStatus("API verified ✓")
+            }
+        } else {
+            updateStatus("Free mode - no API key configured")
+            updateDetail("Open Settings to add OpenAI/OpenRouter keys")
         }
-        updateStatus("API verified")
 
         // Step 7: Configure and start OpenClaw
         if (serverManager.isOpenClawInstalled()) {
@@ -433,6 +422,46 @@ class MainActivity : AppCompatActivity() {
         @android.webkit.JavascriptInterface
         fun getUnlockMessage(): String {
             return "Freebuff is fully unlocked. No paywall, no subscription, no rate limits."
+        }
+
+        @android.webkit.JavascriptInterface
+        fun saveProviderKey(providerId: String, apiKey: String): Boolean {
+            return try {
+                val paths = BootstrapInstaller.getPaths(this@MainActivity)
+                val configDir = File(paths.homeDir, ".codex")
+                configDir.mkdirs()
+                
+                when (providerId) {
+                    "openai", "codex" -> {
+                        val authFile = File(configDir, "auth.json")
+                        authFile.writeText("""{"token":"$apiKey","type":"api_key"}""")
+                    }
+                    "openrouter" -> {
+                        val authFile = File(configDir, "auth.json")
+                        authFile.writeText("""{"token":"$apiKey","type":"api_key","provider":"openrouter"}""")
+                    }
+                    else -> {}
+                }
+                Log.i(TAG, "Saved API key for $providerId")
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save provider key: ${e.message}")
+                false
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun getConfiguredProviders(): String {
+            val providers = mutableListOf<Map<String, Any>>()
+            for (provider in listOf("openai", "openrouter", "opencode")) {
+                val hasKey = try {
+                    val paths = BootstrapInstaller.getPaths(this@MainActivity)
+                    val authFile = File(paths.homeDir, ".codex/auth.json")
+                    authFile.exists()
+                } catch (_: Exception) { false }
+                if (hasKey) providers.add(mapOf("id" to provider, "connected" to true))
+            }
+            return providers.toString()
         }
     }
 }
