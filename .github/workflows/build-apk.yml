@@ -29,32 +29,24 @@ jobs:
           gradle-version: "8.9"
 
       - name: Make gradlew executable
-        working-directory: apps/android
+        working-directory: android
         run: chmod +x ./gradlew
 
-      - name: Build debug APK
-        working-directory: apps/android
-        run: ./gradlew :app:assembleThirdPartyDebug --no-daemon --stacktrace
+      - name: Download Termux bootstrap (self-contained Linux/Node env)
+        run: bash android/scripts/download-bootstrap.sh
 
-      - name: Locate and rename APK
-        run: |
-          APK=$(find apps/android -name "*.apk" -print -quit)
-          if [ -z "$APK" ]; then
-            echo "No APK found after build!"
-            find apps/android -name "*.apk" -type f 2>/dev/null || echo "No APK anywhere"
-            exit 1
-          fi
-          echo "Found APK: $APK"
-          mkdir -p apps/android/app/build/outputs/apk
-          cp "$APK" apps/android/app/build/outputs/apk/anyclaw-debug.apk
-          echo "APK_PATH=$APK" >> $GITHUB_ENV
+      - name: Build debug APK (CodexMobile = App Store "AnyClaw")
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/anyclaw.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: anyclaw-debug
-          path: apps/android/app/build/outputs/apk/anyclaw-debug.apk
-          if-no-files-found: error
+          name: anyclaw
+          path: android/app/build/outputs/apk/debug/anyclaw.apk
 
       - name: Generate changelog
         id: changelog
@@ -78,9 +70,7 @@ jobs:
           tag_name: v${{ github.run_number }}
           name: "AnyClaw v${{ github.run_number }} (${{ github.ref_name }})"
           body: |
-            🦞 **AnyClaw** — OpenClaw + Codex on Android
-
-            📱 Debug APK for install on ARM64 Android 7.0+
+            AnyClaw — OpenClaw + Codex on Android (self-contained debug build).
 
             ### Changes
             ${{ steps.changelog.outputs.notes }}
@@ -88,6 +78,6 @@ jobs:
             ---
             Branch: ${{ github.ref_name }}
             Built from commit ${{ github.sha }}
-          files: apps/android/app/build/outputs/apk/anyclaw-debug.apk
+          files: android/app/build/outputs/apk/debug/anyclaw.apk
           draft: false
-          prerelease: false
+          prerelease: true
