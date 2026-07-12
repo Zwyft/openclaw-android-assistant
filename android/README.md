@@ -12,14 +12,16 @@ Prebuilt OpenClaw + Codex Android assistant with Freebuff unlock and Hermes Web 
 
 ## Building
 
-### Standard build (downloads dependencies on first launch)
+### Standard build (bootstrap bundled, runtime installs for Node/Codex)
 
 ```bash
 cd android
+# Optional: download the Termux bootstrap (CI does this automatically)
+bash scripts/download-bootstrap.sh
 ./gradlew :app:assembleDebug
 ```
 
-> **Note**: With the standard build the app still downloads and installs Node.js, Python, OpenClaw, and Codex on the device during the first launch. Use the prebuilt build below if you want everything bundled in the APK.
+> **Note**: The standard build bundles the Termux bootstrap (a minimal Linux environment) so the app can extract it on first launch. It still downloads and installs Node.js, Python, OpenClaw, and Codex on the device at runtime. Use the prebuilt build below if you want everything bundled in the APK.
 
 ### Prebuilt environment build (no runtime downloads)
 
@@ -68,5 +70,5 @@ This produces `app/src/main/assets/bootstrap-aarch64.zip` containing the full Te
   - `ExtensionManager.kt` — extension discovery and registration
   - `BootstrapInstaller.kt` — Termux bootstrap extraction
   - `SettingsActivity.kt` — API key and server management
-- `app/src/main/res/raw/fallback.html` — fallback page shown when the full UI cannot load
+- `app/src/main/res/raw/bundled_fallback.html` — fallback page shown when the bundled web server cannot start
 - `scripts/package-prebuilt-environment.sh` — build helper for prebuilt APKs

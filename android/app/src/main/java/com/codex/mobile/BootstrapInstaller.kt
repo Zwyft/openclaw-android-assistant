@@ -80,7 +80,19 @@ object BootstrapInstaller {
         val buffer = ByteArray(8192)
         val symlinks = mutableListOf<Pair<String, String>>()
 
-        context.assets.open(assetName).use { assetStream ->
+        // Open the bootstrap archive. If it is missing from the APK assets,
+        // surface a clear error message instead of a low-level FileNotFoundException.
+        val assetStream = try {
+            context.assets.open(assetName)
+        } catch (e: java.io.FileNotFoundException) {
+            throw RuntimeException(
+                "Bootstrap archive $assetName is missing from APK assets. " +
+                    "Run './scripts/download-bootstrap.sh' before building, or build the prebuilt APK.",
+                e,
+            )
+        }
+
+        assetStream.use {
             ZipInputStream(assetStream).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {

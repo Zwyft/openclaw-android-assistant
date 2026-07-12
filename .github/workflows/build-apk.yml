@@ -33,6 +33,12 @@ jobs:
         working-directory: android
         run: chmod +x ./gradlew
 
+      - name: Download Termux bootstrap
+        run: |
+          echo "=== Downloading Termux bootstrap ==="
+          bash android/scripts/download-bootstrap.sh aarch64
+          ls -lh android/app/src/main/assets/bootstrap-aarch64.zip
+
       - name: Verify Freebuff assets
         run: |
           echo "=== Freebuff Integration Check ==="
