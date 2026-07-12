@@ -254,7 +254,7 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "OAuth redirect received: $data")
             // The codex login process should detect this via the local server
             // For now, just log it and bring the app to foreground
-            updateStatus("Login redirect received, completing authentication...")
+            Log.d(TAG, "Login redirect received, completing authentication...")
         }
         setIntent(intent)
     }
@@ -492,7 +492,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     },
-                    onProgress = { msg -> updateDetail(msg) },
+                    onProgress = { msg -> Log.d(TAG, "[login] $msg") },
                 )
                 future.complete(ok)
             } catch (e: Exception) {
@@ -593,20 +593,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ── UI helpers ──────────────────────────────────────────────────────────
-
-    private fun showError(message: String) {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.error_title)
-            .setMessage(message)
-            .setPositiveButton(R.string.retry) { _, _ ->
-                startSetupFlow()
-            }
-            .setNegativeButton(R.string.cancel) { _, _ ->
-                finish()
-            }
-            .setCancelable(false)
-            .show()
-    }
 
     private fun showLoading(show: Boolean) {
         loadingOverlay.visibility = if (show) View.VISIBLE else View.GONE
