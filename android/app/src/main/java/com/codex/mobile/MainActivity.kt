@@ -13,7 +13,9 @@ import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -31,6 +33,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusDetail: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var serverManager: CodexServerManager
+    private lateinit var btnSettings: Button
+    private lateinit var btnWebviewSettings: ImageButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,13 +45,33 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         statusDetail = findViewById(R.id.statusDetail)
         progressBar = findViewById(R.id.progressBar)
+        btnSettings = findViewById(R.id.btnSettings)
+        btnWebviewSettings = findViewById(R.id.btnWebviewSettings)
 
         serverManager = CodexServerManager(this)
+
+        // Settings button on loading screen — visible after server is ready
+        btnSettings.setOnClickListener {
+            openSettings()
+        }
+
+        // Settings button floating on WebView
+        btnWebviewSettings.setOnClickListener {
+            openSettings()
+        }
 
         requestBatteryOptimizationExemption()
         startForegroundService()
         setupWebView()
         startSetupFlow()
+    }
+
+    /**
+     * Open the native Settings activity.
+     */
+    private fun openSettings() {
+        val intent = Intent(this, SettingsActivity::class.java)
+        startActivity(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -286,10 +310,13 @@ class MainActivity : AppCompatActivity() {
             throw RuntimeException("Server did not start in time")
         }
 
-        // Step 10: Show web UI
+        // Step 10: Show web UI and settings buttons
         runOnUiThread {
             showLoading(false)
             webView.visibility = View.VISIBLE
+            btnWebviewSettings.visibility = View.VISIBLE
+            // Also show settings button on loading screen for easy access
+            findViewById<View>(R.id.loadingActions).visibility = View.VISIBLE
             webView.loadUrl("http://127.0.0.1:${CodexServerManager.SERVER_PORT}/")
         }
     }

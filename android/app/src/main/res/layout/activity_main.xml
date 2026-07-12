@@ -46,6 +46,44 @@
             android:gravity="center"
             android:visibility="gone" />
 
+        <!-- Settings button on loading screen -->
+        <LinearLayout
+            android:id="@+id/loadingActions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="32dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/btnSettings"
+                android:layout_width="wrap_content"
+                android:layout_height="42dp"
+                android:backgroundTint="#6366f1"
+                android:text="@string/settings"
+                android:textColor="#ffffff"
+                android:textSize="14sp"
+                style="@style/Widget.Material3.Button.Tonal" />
+
+        </LinearLayout>
+
     </LinearLayout>
+
+    <!-- WebView settings button (floating action) -->
+    <ImageButton
+        android:id="@+id/btnWebviewSettings"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="12dp"
+        android:backgroundTint="#1e1b4b"
+        android:src="@android:drawable/ic_menu_manage"
+        android:contentDescription="@string/settings"
+        android:visibility="gone"
+        android:scaleType="center"
+        android:elevation="6dp"
+        style="@style/Widget.Material3.Button.Tonal" />
 
 </FrameLayout>

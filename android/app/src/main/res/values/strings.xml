@@ -1,19 +1,93 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AnyClaw</string>
+
+    <!-- Setup Status -->
     <string name="status_initializing">Initializing…</string>
     <string name="status_extracting_bootstrap">Extracting environment…</string>
     <string name="status_installing_packages">Installing packages (first run)…</string>
     <string name="status_installing_codex">Installing Codex CLI…</string>
     <string name="status_starting_server">Starting server…</string>
     <string name="status_waiting_server">Waiting for server…</string>
+
+    <!-- API Key Dialog -->
     <string name="api_key_title">OpenAI API Key</string>
     <string name="api_key_message">Enter your OpenAI API key to use Codex.</string>
     <string name="api_key_hint">sk-…</string>
+
+    <!-- Actions -->
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
+    <string name="retry">Retry</string>
+    <string name="save">Save</string>
+    <string name="clear">Clear</string>
+    <string name="close">Close</string>
+    <string name="settings">Settings</string>
+    <string name="back">Back</string>
+
+    <!-- Errors -->
     <string name="error_title">Error</string>
     <string name="error_bootstrap">Failed to set up the environment. Please try again.</string>
     <string name="error_server">Failed to start the server.</string>
-    <string name="retry">Retry</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_api_keys">API Keys</string>
+    <string name="settings_providers">AI Providers</string>
+    <string name="settings_server">Server</string>
+    <string name="settings_environment">Environment</string>
+    <string name="settings_about">About</string>
+
+    <!-- API Keys -->
+    <string name="openai_key_label">OpenAI API Key</string>
+    <string name="openai_key_desc">Used for Codex CLI and GPT models</string>
+    <string name="openrouter_key_label">OpenRouter API Key</string>
+    <string name="openrouter_key_desc">Access multiple models via OpenRouter</string>
+    <string name="opencode_key_label">OpenCode API Key</string>
+    <string name="opencode_key_desc">For OpenCode agent integration</string>
+    <string name="api_key_placeholder">Enter your API key…</string>
+    <string name="key_saved">✓ API key saved</string>
+    <string name="key_cleared">✗ API key cleared</string>
+    <string name="key_not_set">Not configured</string>
+    <string name="key_save_failed">Failed to save API key</string>
+
+    <!-- Server Status -->
+    <string name="server_running">Server is running</string>
+    <string name="server_stopped">Server is stopped</string>
+    <string name="server_starting">Server is starting…</string>
+    <string name="server_port_label">Port</string>
+    <string name="server_start">Start Server</string>
+    <string name="server_stop">Stop Server</string>
+    <string name="server_restart">Restart Server</string>
+    <string name="server_status_checking">Checking server status…</string>
+
+    <!-- Environment -->
+    <string name="env_bootstrap">Linux Environment</string>
+    <string name="env_bootstrap_installed">Installed</string>
+    <string name="env_bootstrap_not_installed">Not installed</string>
+    <string name="env_nodejs">Node.js</string>
+    <string name="env_python">Python</string>
+    <string name="env_codex">Codex CLI</string>
+    <string name="env_not_available">N/A</string>
+    <string name="env_reinstall">Reinstall Environment</string>
+    <string name="env_reinstall_confirm">This will reinstall the Linux environment. Continue?</string>
+
+    <!-- About -->
+    <string name="about_version">Version</string>
+    <string name="about_build">Build</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_github_url">https://github.com/Zwyft/openclaw-android-assistant</string>
+    <string name="about_license">MIT License</string>
+    <string name="about_agents">OpenClaw + Codex CLI + Claw Code</string>
+
+    <!-- Provider Status -->
+    <string name="provider_connected">Connected</string>
+    <string name="provider_disconnected">Not connected</string>
+    <string name="provider_checking">Checking…</string>
+
+    <!-- Toast Messages -->
+    <string name="toast_key_saved">API key saved successfully</string>
+    <string name="toast_key_cleared">API key removed</string>
+    <string name="toast_server_started">Server started</string>
+    <string name="toast_server_stopped">Server stopped</string>
 </resources>
