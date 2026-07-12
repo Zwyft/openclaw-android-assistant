@@ -1,6 +1,7 @@
 package com.codex.mobile
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -10,6 +11,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.TextInputEditText
 import java.io.File
 
@@ -65,6 +67,10 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var envCodexStatus: TextView
     private lateinit var btnReinstallEnv: Button
 
+    // OpenClaw toggle
+    private lateinit var switchOpenClaw: SwitchMaterial
+    private lateinit var prefs: SharedPreferences
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
@@ -116,6 +122,10 @@ class SettingsActivity : AppCompatActivity() {
         envPythonStatus = findViewById(R.id.envPythonStatus)
         envCodexStatus = findViewById(R.id.envCodexStatus)
         btnReinstallEnv = findViewById(R.id.btnReinstallEnv)
+
+        // OpenClaw toggle
+        switchOpenClaw = findViewById(R.id.switchOpenClaw)
+        prefs = getSharedPreferences("AnyClawPrefs", Context.MODE_PRIVATE)
     }
 
     private fun setupClickListeners() {
@@ -137,6 +147,13 @@ class SettingsActivity : AppCompatActivity() {
 
         // Environment
         btnReinstallEnv.setOnClickListener { confirmReinstall() }
+
+        // OpenClaw toggle
+        switchOpenClaw.isChecked = prefs.getBoolean("enable_openclaw", false)
+        switchOpenClaw.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean("enable_openclaw", isChecked).apply()
+            Toast.makeText(this, if (isChecked) "OpenClaw enabled — restart app to apply" else "OpenClaw disabled — restart app to apply", Toast.LENGTH_SHORT).show()
+        }
     }
 
     // ── API Key Management ─────────────────────────────────────────────────

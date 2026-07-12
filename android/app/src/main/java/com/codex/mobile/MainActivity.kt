@@ -1,5 +1,6 @@
 package com.codex.mobile
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -73,6 +74,60 @@ class MainActivity : AppCompatActivity() {
     private fun openSettings() {
         val intent = Intent(this, SettingsActivity::class.java)
         startActivity(intent)
+    }
+
+    /**
+     * Ensure the Freebuff extension is installed in the global OpenClaw
+     * extensions directory. If it is bundled in the APK assets, extract it.
+     */
+    private fun ensureFreebuffExtension() {
+        try {
+            val paths = BootstrapInstaller.getPaths(this)
+            val freebuffDir = File(paths.homeDir, ".openclaw/extensions/freebuff")
+            val packageFile = File(freebuffDir, "package.json")
+            if (packageFile.exists()) {
+                Log.d(TAG, "Freebuff extension already installed")
+                return
+            }
+
+            val assetList = assets.list("extensions/freebuff") ?: return
+            if (assetList.isEmpty()) {
+                Log.w(TAG, "Freebuff extension assets not found")
+                return
+            }
+
+            freebuffDir.mkdirs()
+            copyAssetFolder("extensions/freebuff", freebuffDir)
+            if (File(freebuffDir, "package.json").exists()) {
+                Log.i(TAG, "Freebuff extension installed to ${freebuffDir.absolutePath}")
+            } else {
+                Log.w(TAG, "Freebuff extension extraction did not produce package.json")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to install Freebuff extension: ${e.message}")
+        }
+    }
+
+    /**
+     * Recursively copy an asset directory to a target File.
+     */
+    private fun copyAssetFolder(assetPath: String, targetDir: File) {
+        val list = assets.list(assetPath) ?: return
+        targetDir.mkdirs()
+        for (entry in list) {
+            val subAsset = "$assetPath/$entry"
+            val subTarget = File(targetDir, entry)
+            val subList = assets.list(subAsset)
+            if (subList != null && subList.isNotEmpty()) {
+                copyAssetFolder(subAsset, subTarget)
+            } else {
+                assets.open(subAsset).use { input ->
+                    subTarget.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -299,20 +354,32 @@ class MainActivity : AppCompatActivity() {
             updateDetail("Open Settings to add OpenAI/OpenRouter keys")
         }
 
-        // Step 7: Configure and start OpenClaw
-        if (serverManager.isOpenClawInstalled()) {
-            updateStatus("Configuring OpenClaw…")
-            serverManager.configureOpenClawAuth()
+        // Step 6b: Ensure Freebuff extension is installed
+        updateStatus("Installing Freebuff extension…")
+        ensureFreebuffExtension()
 
+        // Step 7: Configure and start OpenClaw (only if explicitly enabled)
+        val prefs = getSharedPreferences("AnyClawPrefs", Context.MODE_PRIVATE)
+        val enableOpenClaw = prefs.getBoolean("enable_openclaw", false)
+
+        if (serverManager.isOpenClawInstalled()) {
             updateStatus("Loading extensions…")
             val extensions = extensionManager.loadExtensions()
             updateDetail("Found ${extensions.size} extension(s)")
 
-            updateStatus("Starting OpenClaw gateway…")
-            serverManager.startOpenClawGateway()
+            if (enableOpenClaw && serverManager.isLoggedIn()) {
+                updateStatus("Configuring OpenClaw…")
+                serverManager.configureOpenClawAuth()
 
-            updateStatus("Starting OpenClaw Control UI…")
-            serverManager.startOpenClawControlUiServer()
+                updateStatus("Starting OpenClaw gateway…")
+                serverManager.startOpenClawGateway()
+
+                updateStatus("Starting OpenClaw Control UI…")
+                serverManager.startOpenClawControlUiServer()
+            } else {
+                updateStatus("OpenClaw gateway disabled")
+                updateDetail("Enable it in Settings if you want the OpenClaw Control UI")
+            }
         }
 
         // Step 8: Start web server

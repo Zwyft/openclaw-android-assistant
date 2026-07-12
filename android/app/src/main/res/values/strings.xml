@@ -52,6 +52,8 @@
     <string name="key_save_failed">Failed to save API key</string>
 
     <!-- Server Status -->
+    <string name="enable_openclaw">Enable OpenClaw Gateway</string>
+    <string name="enable_openclaw_desc">Requires sign-in. Restart app to apply.</string>
     <string name="server_running">Server is running</string>
     <string name="server_stopped">Server is stopped</string>
     <string name="server_starting">Server is starting…</string>

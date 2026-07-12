@@ -1,0 +1,23 @@
+{
+  "name": "freebuff-extension",
+  "version": "1.0.0",
+  "description": "Freebuff integration extension for AnyClaw. Unlocks Freebuff agents and Hermes Web UI features.",
+  "main": "index.js",
+  "openclaw": {
+    "id": "freebuff",
+    "name": "Freebuff",
+    "displayName": "Freebuff",
+    "version": "1.0.0",
+    "description": "Freebuff integration extension for AnyClaw. Unlocks Freebuff agents and Hermes Web UI features.",
+    "main": "index.js",
+    "enabled": true,
+    "capabilities": [
+      "code_generation",
+      "terminal_access",
+      "file_explorer",
+      "code_review",
+      "research",
+      "hermes_web_ui"
+    ]
+  }
+}
