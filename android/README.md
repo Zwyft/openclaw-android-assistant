@@ -42,18 +42,22 @@ This produces `app/src/main/assets/bootstrap-aarch64.zip` containing the full Te
 ```
 
 > **Note**: The prebuilt script downloads packages from Termux and npm, so the build itself requires internet. End users who install the resulting APK do not need internet at runtime.
+>
+> **Cache invalidation**: The app caches extracted bundled web UI and server bundle assets by the APK's `versionCode`. If you update only the assets without bumping `versionCode`, the app will continue using the previously cached files. Bump `versionCode`/`versionName` in `app/build.gradle.kts` whenever bundled assets change.
 
 ## First launch flow
 
-1. App extracts the bootstrap prefix (standard build downloads/installs components if the prebuilt bootstrap is not bundled).
+1. App extracts the bootstrap prefix (prebuilt build has everything bundled; standard build downloads/installs components if the prebuilt bootstrap is not bundled).
 2. A dialog asks whether to **Sign In** or **Skip**.
 3. If skipped, the app starts in free mode; API keys can be added later in Settings.
 4. Extensions are discovered and registered.
-5. The local web server starts and the WebView loads the UI.
+5. The bundled AnyClaw home screen starts immediately on `http://127.0.0.1:18923/`.
+6. In the background, the app also attempts to start the full `codex-web-local` server if Codex CLI is installed.
 
 ## Troubleshooting
 
-- **"Failed to start server"**: Make sure `app/src/main/assets/server-bundle` contains the `codex-web-local` files, or that the device has internet so the app can install it from npm. The app now falls back to a minimal page if the full UI cannot load.
+- **"Failed to start server"**: The app now serves the bundled AnyClaw home screen first, so you should always see a UI even if `codex-web-local` is not installed. If the screen is blank, check that `app/src/main/assets/web/index.html` exists.
+- **"Waiting for server" hang**: The bundled web server is now the primary server and starts independently of Codex/OpenClaw. If it still hangs, the bootstrap may not have extracted correctly; use Settings → Reinstall Environment.
 - **Login hangs**: The OAuth flow has a 2-minute timeout. If it expires, add an API key in Settings instead.
 
 ## Project structure

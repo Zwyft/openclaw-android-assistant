@@ -86,6 +86,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Load the bundled fallback HTML page directly into the WebView when
+     * the bundled web server cannot be started. This avoids relying on
+     * raw-resource URLs which are not supported on all Android versions.
+     */
+    private fun loadFallbackPage() {
+        try {
+            val html = resources.openRawResource(R.raw.bundled_fallback).bufferedReader().use { it.readText() }
+            webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load fallback page: ${e.message}")
+            webView.loadData(
+                "<html><body style='background:#020617;color:#e2e8f0;padding:24px;'>" +
+                    "<h1>AnyClaw</h1><p>Open Settings to continue.</p></body></html>",
+                "text/html",
+                "UTF-8",
+            )
+        }
+    }
+
+    /**
      * Inject the paywall-bypass script into the WebView. This runs on every
      * page start and finish so dynamically loaded SPAs also get the bypass.
      */
@@ -459,18 +479,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Step 8: Start web server
-        updateStatus("Starting server…")
-        val started = serverManager.startServer()
-        if (!started) {
-            throw RuntimeException("Failed to start server")
+        // Step 8: Start the bundled web UI server (primary home screen)
+        updateStatus("Starting home screen…")
+        val bundledStarted = serverManager.startBundledWebServer()
+        if (!bundledStarted) {
+            Log.w(TAG, "Bundled web server failed to start; loading fallback page")
+            runOnUiThread {
+                showLoading(false)
+                webView.visibility = View.VISIBLE
+                btnWebviewSettings.visibility = View.VISIBLE
+                findViewById<View>(R.id.loadingActions).visibility = View.VISIBLE
+                loadFallbackPage()
+            }
+            return
         }
 
-        // Step 9: Wait for ready
-        updateStatus("Waiting for server…")
-        val ready = serverManager.waitForServer(timeoutMs = 90_000)
-        if (!ready) {
-            throw RuntimeException("Server did not start in time")
+        // Step 9: Wait briefly for the bundled server to be ready, then show UI
+        updateStatus("Loading home screen…")
+        val bundledReady = serverManager.waitForServer(timeoutMs = 15_000)
+        if (!bundledReady) {
+            throw RuntimeException("Home screen server did not start in time")
         }
 
         // Step 10: Show web UI and settings buttons
@@ -482,6 +510,40 @@ class MainActivity : AppCompatActivity() {
             findViewById<View>(R.id.loadingActions).visibility = View.VISIBLE
             webView.loadUrl("http://127.0.0.1:${CodexServerManager.SERVER_PORT}/")
         }
+
+        // Step 11 (background): Optionally start the full codex-web-local server
+        // if it is installed. The bundled UI remains usable regardless because
+        // the full server runs on a separate port.
+        Thread {
+            try {
+                if (serverManager.isCodexInstalled()) {
+                    Log.i(TAG, "Codex CLI installed; attempting to start full codex-web-local server")
+                    serverManager.installServerBundle { msg -> Log.d(TAG, "[server-bundle] $msg") }
+
+                    val fullStarted = serverManager.startServer(CodexServerManager.FULL_SERVER_PORT)
+                    if (fullStarted) {
+                        val fullReady = serverManager.waitForServer(
+                            port = CodexServerManager.FULL_SERVER_PORT,
+                            timeoutMs = 60_000,
+                        )
+                        if (fullReady) {
+                            runOnUiThread {
+                                Log.i(TAG, "Full codex-web-local server ready; switching WebView")
+                                webView.loadUrl("http://127.0.0.1:${CodexServerManager.FULL_SERVER_PORT}/")
+                            }
+                        } else {
+                            Log.w(TAG, "Full codex-web-local server did not become ready; keeping bundled UI")
+                        }
+                    } else {
+                        Log.w(TAG, "Full codex-web-local server failed to start; keeping bundled UI")
+                    }
+                } else {
+                    Log.i(TAG, "Codex CLI not installed; using bundled home screen only")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Full codex-web-local server could not start: ${e.message}")
+            }
+        }.start()
     }
 
     /**

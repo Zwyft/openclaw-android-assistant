@@ -1,0 +1,106 @@
+name: Build Prebuilt APK
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-prebuilt-apk:
+    runs-on: ubuntu-latest
+    # Building a full Termux prefix under QEMU aarch64 emulation is very slow.
+    # Expect 30-120 minutes depending on GitHub Actions runner load.
+    timeout-minutes: 240
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Make gradlew executable
+        working-directory: android
+        run: chmod +x ./gradlew
+
+      - name: Set up QEMU for aarch64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build prebuilt Termux environment
+        run: |
+          echo "Building prebuilt aarch64 Termux prefix (this may take 15-60 minutes)..."
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD:/workspace" \
+            -w /workspace/android \
+            ubuntu:24.04 \
+            bash -c "
+              apt-get update && \
+              apt-get install -y curl unzip zip && \
+              bash scripts/package-prebuilt-environment.sh
+            "
+          echo "Prebuilt environment size:"
+          ls -lh android/app/src/main/assets/bootstrap-aarch64.zip || true
+
+      - name: Build debug APK (prebuilt environment)
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Verify APK output
+        run: |
+          APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          if [ -f "$APK_PATH" ]; then
+            echo "✓ Prebuilt APK built successfully"
+            ls -lh "$APK_PATH"
+            cp "$APK_PATH" android/app/build/outputs/apk/debug/anyclaw-prebuilt.apk
+          else
+            echo "✗ Prebuilt APK build failed"
+            exit 1
+          fi
+
+      - name: Upload prebuilt APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anyclaw-prebuilt
+          path: android/app/build/outputs/apk/debug/anyclaw-prebuilt.apk
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "AnyClaw Prebuilt ${{ github.ref_name }}"
+          body: |
+            ## AnyClaw Android Assistant (Prebuilt Environment)
+
+            This APK includes a full prebuilt Termux prefix (Node.js, Python, proot, build tools, OpenClaw, Codex) so the app does not need to download anything at runtime.
+
+            ### Installation
+            1. Download `anyclaw-prebuilt.apk`
+            2. Install on Android device (enable "Install from unknown sources")
+            3. Open app and choose **Sign In** or **Skip**
+
+            ### Notes
+            - APK size is larger (~500 MB+) because the environment is bundled.
+            - First launch only extracts the environment; no runtime downloads.
+          files: android/app/build/outputs/apk/debug/anyclaw-prebuilt.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: false

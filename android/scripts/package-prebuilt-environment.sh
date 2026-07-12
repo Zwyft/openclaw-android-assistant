@@ -120,6 +120,9 @@ fi
 echo "[5/6] Installing Codex CLI..."
 npm install -g @openai/codex
 
+echo "[5/6] Installing codex-web-local server bundle..."
+npm install -g codex-web-local || echo "WARNING: codex-web-local install failed (bundled web UI will be used)"
+
 # Install native Codex binary manually because npm refuses on Android
 CODEX_VERSION="0.104.0"
 mkdir -p "$STAGING_DIR/codex-bin"
@@ -133,7 +136,36 @@ cp package/package.json "$CODEX_TARGET/package.json"
 chmod 700 "$CODEX_TARGET/vendor/aarch64-unknown-linux-musl/codex/codex"
 
 # ---------------------------------------------------------------------------
-# 5. Package the prefix into bootstrap-aarch64.zip
+# 5.5 Create wrapper scripts so node/npm/codex work from any shell
+# ---------------------------------------------------------------------------
+echo "[5.5/6] Creating wrapper scripts..."
+rm -f "$PREFIX/bin/node" "$PREFIX/bin/npm" "$PREFIX/bin/codex"
+
+# NOTE: These wrapper scripts hardcode the app's private data path.
+# If the applicationId in app/build.gradle.kts ever changes, update
+# /data/user/0/com.codex.mobile/files/usr to match the new package name.
+cat > "$PREFIX/bin/node" <<'EOF'
+#!/data/user/0/com.codex.mobile/files/usr/bin/sh
+exec /data/user/0/com.codex.mobile/files/usr/bin/node "$@"
+EOF
+chmod 700 "$PREFIX/bin/node"
+
+cat > "$PREFIX/bin/npm" <<'EOF'
+#!/data/user/0/com.codex.mobile/files/usr/bin/sh
+exec /data/user/0/com.codex.mobile/files/usr/bin/node /data/user/0/com.codex.mobile/files/usr/lib/node_modules/npm/bin/npm-cli.js "$@"
+EOF
+chmod 700 "$PREFIX/bin/npm"
+
+if [ -f "$PREFIX/lib/node_modules/@openai/codex/bin/codex.js" ]; then
+  cat > "$PREFIX/bin/codex" <<'EOF'
+#!/data/user/0/com.codex.mobile/files/usr/bin/sh
+exec /data/user/0/com.codex.mobile/files/usr/bin/node /data/user/0/com.codex.mobile/files/usr/lib/node_modules/@openai/codex/bin/codex.js "$@"
+EOF
+  chmod 700 "$PREFIX/bin/codex"
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Package the prefix into bootstrap-aarch64.zip
 # ---------------------------------------------------------------------------
 echo "[6/6] Packaging prebuilt environment..."
 cd "$PREFIX_DIR"

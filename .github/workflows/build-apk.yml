@@ -33,9 +33,6 @@ jobs:
         working-directory: android
         run: chmod +x ./gradlew
 
-      - name: Download Termux bootstrap (self-contained Linux/Node env)
-        run: bash android/scripts/download-bootstrap.sh
-
       - name: Verify Freebuff assets
         run: |
           echo "=== Freebuff Integration Check ==="

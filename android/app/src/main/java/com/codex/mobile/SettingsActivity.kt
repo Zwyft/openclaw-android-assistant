@@ -304,7 +304,7 @@ class SettingsActivity : AppCompatActivity() {
             btnStopServer.isEnabled = false
         }
 
-        serverPortValue.text = CodexServerManager.SERVER_PORT.toString()
+        serverPortValue.text = serverManager.runningServerPort?.toString() ?: "-"
     }
 
     /**

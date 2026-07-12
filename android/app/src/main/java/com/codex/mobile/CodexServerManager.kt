@@ -1,7 +1,9 @@
 package com.codex.mobile
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import java.io.BufferedReader
 import java.io.OutputStreamWriter
 import java.io.File
@@ -21,27 +23,47 @@ class CodexServerManager(private val context: Context) {
         private const val TAG = "CodexServerManager"
         const val SERVER_PORT = 18923
         private const val PROXY_PORT = 18924
+        const val FULL_SERVER_PORT = 18925
         private const val CODEX_VERSION = "0.104.0"
         const val OPENCLAW_GATEWAY_PORT = 18789
         const val OPENCLAW_CONTROL_UI_PORT = 19001
     }
 
     private var serverProcess: Process? = null
+    private var fullServerProcess: Process? = null
     private var proxyProcess: Process? = null
     private var authCallbackServer: AuthCallbackServer? = null
     private var openClawGatewayProcess: Process? = null
     private var openClawControlUiProcess: Process? = null
 
+    /**
+     * Returns true if either the bundled web server or the full codex-web-local
+     * server is currently running.
+     */
     val isRunning: Boolean
-        get() {
-            val proc = serverProcess ?: return false
-            return try {
-                proc.exitValue()
-                false
-            } catch (_: IllegalThreadStateException) {
-                true
-            }
+        get() = isProcessAlive(serverProcess) || isProcessAlive(fullServerProcess)
+
+    /**
+     * Returns the port of the currently running server, or null if neither
+     * the bundled web server nor the full codex-web-local server is running.
+     * The full server takes precedence when both are running.
+     */
+    val runningServerPort: Int?
+        get() = when {
+            isProcessAlive(fullServerProcess) -> FULL_SERVER_PORT
+            isProcessAlive(serverProcess) -> SERVER_PORT
+            else -> null
         }
+
+    private fun isProcessAlive(proc: Process?): Boolean {
+        proc ?: return false
+        return try {
+            proc.exitValue()
+            false
+        } catch (_: IllegalThreadStateException) {
+            true
+        }
+    }
 
     // ── Shell helpers ──────────────────────────────────────────────────────
 
@@ -1030,14 +1052,27 @@ WEOF
     fun installServerBundle(onProgress: (String) -> Unit): Boolean {
         val paths = BootstrapInstaller.getPaths(context)
         val targetDir = File(paths.prefixDir, "lib/node_modules/codex-web-local")
+        val versionFile = File(paths.homeDir, ".server-bundle-version")
+        val currentVersion = try {
+            PackageInfoCompat.getLongVersionCode(context.packageManager.getPackageInfo(context.packageName, 0)).toString()
+        } catch (_: Exception) {
+            "0"
+        }
 
         try {
             val assetFiles = context.assets.list("server-bundle") ?: emptyArray()
             if (assetFiles.isNotEmpty()) {
+                val cachedVersion = if (versionFile.exists()) versionFile.readText().trim() else ""
+                if (cachedVersion == currentVersion && File(targetDir, "dist-cli/index.js").exists()) {
+                    Log.i(TAG, "Using cached server bundle (version $currentVersion)")
+                    return true
+                }
+
                 onProgress("Installing server bundle from APK…")
                 targetDir.deleteRecursively()
                 targetDir.mkdirs()
                 extractAssetDir("server-bundle", targetDir)
+                versionFile.writeText(currentVersion)
                 Log.i(TAG, "Server bundle extracted to $targetDir")
                 return true
             }
@@ -1357,13 +1392,16 @@ WEOF
      * Start the codex-web-local server. The CONNECT proxy must be running
      * and authentication must have been completed first.
      *
-     * If the codex-web-local package is missing or fails to start, a minimal
-     * fallback static server is started so the WebView always has something
-     * to display and the user can reach Settings.
+     * Returns false if the codex-web-local package is not installed. The
+     * bundled web server (started via [startBundledWebServer]) is the primary
+     * UI, so this method is only used when the full Codex UI is available.
+     *
+     * @param port The port to run the full server on. Defaults to [FULL_SERVER_PORT]
+     *             so it does not conflict with the bundled web server.
      */
-    fun startServer(): Boolean {
-        if (isRunning) {
-            Log.i(TAG, "Server already running")
+    fun startServer(port: Int = FULL_SERVER_PORT): Boolean {
+        if (isProcessAlive(fullServerProcess)) {
+            Log.i(TAG, "Full server already running")
             return true
         }
 
@@ -1376,11 +1414,11 @@ WEOF
         val shell = "${paths.prefixDir}/bin/sh"
 
         if (!File(serverScript).exists()) {
-            Log.w(TAG, "codex-web-local not found; starting fallback static server")
-            return startFallbackStaticServer(env)
+            Log.w(TAG, "codex-web-local not found; cannot start full server")
+            return false
         }
 
-        val command = "exec node $serverScript --port $SERVER_PORT --no-password"
+        val command = "exec node $serverScript --port $port --no-password"
         Log.i(TAG, "Starting server: $command")
 
         val pb = ProcessBuilder(shell, "-c", command)
@@ -1390,7 +1428,7 @@ WEOF
         pb.redirectErrorStream(true)
 
         val proc = pb.start()
-        serverProcess = proc
+        fullServerProcess = proc
 
         Thread {
             val reader = BufferedReader(InputStreamReader(proc.inputStream))
@@ -1406,39 +1444,64 @@ WEOF
     }
 
     /**
-     * Start a minimal Node.js static file server as a fallback when the
-     * codex-web-local package is unavailable. Serves a tiny bundled HTML
-     * page from the APK assets so the app never shows a blank screen.
+     * Extract the bundled web UI from APK assets into the app's files directory
+     * and start a static file server on [SERVER_PORT]. This is the primary
+     * server path; it does not depend on codex-web-local being installed.
+     *
+     * The extracted files are cached between launches using the app's version
+     * code, so re-extraction only happens after an app update.
      */
-    private fun startFallbackStaticServer(env: Map<String, String>): Boolean {
-        val paths = BootstrapInstaller.getPaths(context)
-        val fallbackDir = File(paths.homeDir, "fallback-server")
-        fallbackDir.mkdirs()
-
-        // Write a minimal fallback page from APK resources if not already present.
-        val indexFile = File(fallbackDir, "index.html")
-        if (!indexFile.exists()) {
-            try {
-                context.resources.openRawResource(com.codex.mobile.R.raw.fallback).use { input ->
-                    indexFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Could not read fallback.html resource: ${e.message}")
-                indexFile.writeText("<html><body style='background:#020617;color:#e2e8f0;'>AnyClaw ready</body></html>")
-            }
+    fun startBundledWebServer(): Boolean {
+        if (isProcessAlive(serverProcess)) {
+            Log.i(TAG, "Bundled web server already running")
+            return true
         }
 
-        serverProcess = startStaticServer(fallbackDir.absolutePath, SERVER_PORT, "fallback-server", env)
-        return true
+        val paths = BootstrapInstaller.getPaths(context)
+        val webDir = File(paths.homeDir, "bundled-web")
+        val versionFile = File(paths.homeDir, ".bundled-web-version")
+        val currentVersion = try {
+            PackageInfoCompat.getLongVersionCode(context.packageManager.getPackageInfo(context.packageName, 0)).toString()
+        } catch (_: Exception) {
+            "0"
+        }
+
+        try {
+            val cachedVersion = if (versionFile.exists()) versionFile.readText().trim() else ""
+            val needsExtract = cachedVersion != currentVersion || !File(webDir, "index.html").exists()
+            if (needsExtract) {
+                Log.i(TAG, "Extracting bundled web UI (version $currentVersion)")
+                webDir.deleteRecursively()
+                webDir.mkdirs()
+                extractAssetDir("web", webDir)
+                versionFile.writeText(currentVersion)
+            } else {
+                Log.i(TAG, "Using cached bundled web UI (version $currentVersion)")
+            }
+
+            if (!File(webDir, "index.html").exists()) {
+                Log.e(TAG, "Bundled web UI missing index.html")
+                return false
+            }
+
+            val env = buildEnvironment(paths).toMutableMap()
+            env["HTTPS_PROXY"] = "http://127.0.0.1:$PROXY_PORT"
+            env["HTTP_PROXY"] = "http://127.0.0.1:$PROXY_PORT"
+
+            serverProcess = startStaticServer(webDir.absolutePath, SERVER_PORT, "bundled-web", env)
+            Log.i(TAG, "Bundled web server started on port $SERVER_PORT")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start bundled web server: ${e.message}")
+            return false
+        }
     }
 
 
 
-    fun waitForServer(timeoutMs: Long = 60_000): Boolean {
+    fun waitForServer(port: Int = SERVER_PORT, timeoutMs: Long = 60_000): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
-        val url = URL("http://127.0.0.1:$SERVER_PORT/")
+        val url = URL("http://127.0.0.1:$port/")
 
         while (System.currentTimeMillis() < deadline) {
             try {
@@ -1449,7 +1512,7 @@ WEOF
                 val code = conn.responseCode
                 conn.disconnect()
                 if (code in 200..399) {
-                    Log.i(TAG, "Server is ready (HTTP $code)")
+                    Log.i(TAG, "Server is ready on port $port (HTTP $code)")
                     return true
                 }
             } catch (_: Exception) {
@@ -1458,29 +1521,39 @@ WEOF
             Thread.sleep(500)
         }
 
-        Log.e(TAG, "Server did not become ready within ${timeoutMs}ms")
+        Log.e(TAG, "Server on port $port did not become ready within ${timeoutMs}ms")
         return false
     }
 
     fun stopServer() {
-        val proc = serverProcess ?: return
-        serverProcess = null
+        stopWebServers()
+        stopOpenClaw()
+        stopProxy()
+    }
 
+    /**
+     * Stop the web server processes (bundled and/or codex-web-local),
+     * leaving the proxy and OpenClaw processes running.
+     */
+    fun stopWebServers() {
+        stopProcess(serverProcess) { serverProcess = null }
+        stopProcess(fullServerProcess) { fullServerProcess = null }
+        Log.i(TAG, "Web servers stopped")
+    }
+
+    private fun stopProcess(proc: Process?, clearRef: () -> Unit) {
+        proc ?: return
+        clearRef()
         try {
             proc.destroy()
         } catch (e: Exception) {
-            Log.w(TAG, "Error destroying server process: ${e.message}")
+            Log.w(TAG, "Error destroying process: ${e.message}")
         }
-
         try {
             proc.waitFor()
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
         }
-
-        stopOpenClaw()
-        stopProxy()
-        Log.i(TAG, "Server stopped")
     }
 
     private fun stopOpenClaw() {
