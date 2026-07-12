@@ -31,9 +31,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private lateinit var loadingOverlay: View
-    private lateinit var statusText: TextView
-    private lateinit var statusDetail: TextView
-    private lateinit var progressBar: ProgressBar
     private lateinit var serverManager: CodexServerManager
     private val extensionManager: ExtensionManager by lazy { ExtensionManager(this) }
     private val paywallBypassScript: String by lazy {
@@ -53,9 +50,6 @@ class MainActivity : AppCompatActivity() {
 
         webView = findViewById(R.id.webView)
         loadingOverlay = findViewById(R.id.loadingOverlay)
-        statusText = findViewById(R.id.statusText)
-        statusDetail = findViewById(R.id.statusDetail)
-        progressBar = findViewById(R.id.progressBar)
         btnSettings = findViewById(R.id.btnSettings)
         btnWebviewSettings = findViewById(R.id.btnWebviewSettings)
 
@@ -74,7 +68,43 @@ class MainActivity : AppCompatActivity() {
         requestBatteryOptimizationExemption()
         startForegroundService()
         setupWebView()
-        startSetupFlow()
+        showMainScreen()
+        startBackgroundSetup()
+    }
+
+    /**
+     * Show the main AnyClaw UI immediately without waiting for any server.
+     * The bundled web assets are loaded directly from the APK.
+     */
+    private fun showMainScreen() {
+        runOnUiThread {
+            showLoading(false)
+            webView.visibility = View.VISIBLE
+            btnWebviewSettings.visibility = View.VISIBLE
+            webView.loadUrl("file:///android_asset/web/index.html")
+        }
+    }
+
+    /**
+     * Start the environment setup in the background. The UI is already
+     * visible; this only prepares the full codex-web-local server so the
+     * WebView can switch to it once it is ready.
+     */
+    private fun startBackgroundSetup() {
+        Thread {
+            try {
+                runSetup()
+            } catch (e: Exception) {
+                Log.e(TAG, "Background setup failed", e)
+                runOnUiThread {
+                    android.widget.Toast.makeText(
+                        this,
+                        "Background setup failed: ${e.message}",
+                        android.widget.Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }.start()
     }
 
     /**
@@ -276,7 +306,7 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
-            allowFileAccess = false
+            allowFileAccess = true
             setSupportZoom(false)
         }
 
@@ -307,57 +337,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startSetupFlow() {
-        showLoading(true)
-        setStatus("Initializing…")
-
-        Thread {
-            try {
-                runSetup()
-            } catch (e: Exception) {
-                Log.e(TAG, "Setup failed", e)
-                runOnUiThread {
-                    showError(e.message ?: "Unknown error")
-                }
-            }
-        }.start()
-    }
-
     private fun runSetup() {
+        // All setup is non-blocking. The main UI is already visible and loaded
+        // directly from APK assets. We only prepare the full server in the
+        // background so advanced features can switch to it once it is ready.
+
         // Step 1: Extract bootstrap
         if (!BootstrapInstaller.isBootstrapInstalled(this)) {
-            updateStatus("Extracting environment…")
-            BootstrapInstaller.install(this) { msg -> updateStatus(msg) }
+            BootstrapInstaller.install(this) { msg -> Log.d(TAG, "[bootstrap] $msg") }
         }
-        updateStatus("Environment ready")
 
         // Step 1b: Install proot (needed for dpkg/apt-get path remapping)
         if (!serverManager.isProotInstalled()) {
-            updateStatus("Installing proot…", "Needed for package management")
-            val prootOk = serverManager.installProot { msg -> updateDetail(msg) }
+            val prootOk = serverManager.installProot { msg -> Log.d(TAG, "[proot] $msg") }
             if (!prootOk) {
-                throw RuntimeException("Failed to install proot")
+                Log.w(TAG, "proot install failed — continuing without package management")
             }
         }
-        updateStatus("proot ready")
 
         // Step 2: Install Node.js
         if (!serverManager.isNodeInstalled()) {
-            updateStatus("Installing Node.js (first run)…", "This may take a few minutes")
-            val nodeOk = serverManager.installNode { msg -> updateDetail(msg) }
+            val nodeOk = serverManager.installNode { msg -> Log.d(TAG, "[node] $msg") }
             if (!nodeOk) {
-                throw RuntimeException("Failed to install Node.js")
+                Log.w(TAG, "Node.js install failed — continuing without full server")
+                return
             }
         }
-        updateStatus("Node.js ready")
 
         // Step 2b: Install Python
         if (!serverManager.isPythonInstalled()) {
-            updateStatus("Installing Python…")
-            val pyOk = serverManager.installPython { msg -> updateDetail(msg) }
-            if (!pyOk) {
-                Log.w(TAG, "Python install failed — continuing without it")
-            }
+            serverManager.installPython { msg -> Log.d(TAG, "[python] $msg") }
         }
 
         // Step 2c: Install bionic-compat.js (Android platform shim for Node.js)
@@ -365,94 +374,60 @@ class MainActivity : AppCompatActivity() {
 
         // Step 2d: Install OpenClaw
         if (!serverManager.isOpenClawInstalled()) {
-            updateStatus("Installing build dependencies…")
-            serverManager.installOpenClawDeps { msg -> updateDetail(msg) }
-
-            updateStatus("Installing OpenClaw…", "This may take several minutes")
-            val openclawOk = serverManager.installOpenClaw { msg -> updateDetail(msg) }
-            if (!openclawOk) {
-                Log.w(TAG, "OpenClaw install failed — continuing without it")
-            } else {
-                updateStatus("OpenClaw installed")
-            }
+            serverManager.installOpenClawDeps { msg -> Log.d(TAG, "[deps] $msg") }
+            serverManager.installOpenClaw { msg -> Log.d(TAG, "[openclaw] $msg") }
         }
 
         // Step 3: Install Codex CLI
         if (!serverManager.isCodexInstalled()) {
-            updateStatus("Installing Codex CLI…", "This may take a few minutes")
-            val codexOk = serverManager.installCodex { msg -> updateDetail(msg) }
+            val codexOk = serverManager.installCodex { msg -> Log.d(TAG, "[codex] $msg") }
             if (!codexOk) {
-                throw RuntimeException("Failed to install Codex")
+                Log.w(TAG, "Codex CLI install failed — continuing without full server")
+                return
             }
         }
 
         // Ensure codex wrapper script exists
         serverManager.ensureCodexWrapperScript()
 
-        // Step 3a: Extract web UI from APK assets (every launch)
-        updateStatus("Updating web UI…")
-        serverManager.installServerBundle { msg -> updateDetail(msg) }
+        // Step 3a: Extract web UI from APK assets
+        serverManager.installServerBundle { msg -> Log.d(TAG, "[server-bundle] $msg") }
         patchServerBundlePaywallChecks()
 
         // Step 3b: Install native platform binary
         if (!serverManager.isPlatformBinaryInstalled()) {
-            updateStatus("Installing Codex platform binary…")
-            val binOk = serverManager.installPlatformBinary { msg -> updateDetail(msg) }
-            if (!binOk) {
-                throw RuntimeException("Failed to install Codex platform binary")
-            }
+            serverManager.installPlatformBinary { msg -> Log.d(TAG, "[platform-binary] $msg") }
         }
-        updateStatus("Codex ready")
 
         // Step 3c: Write full-access config and create default workspace
         serverManager.ensureFullAccessConfig()
         serverManager.ensureDefaultWorkspace()
 
         // Step 4: Start CONNECT proxy (needed for native binary DNS/TLS)
-        updateStatus("Starting network proxy…")
         if (!serverManager.startProxy()) {
-            throw RuntimeException("Failed to start network proxy")
+            Log.w(TAG, "Failed to start network proxy — continuing without it")
         }
 
         // Step 5: Authentication (optional - user can sign in or skip)
-        updateStatus("Checking authentication…")
         if (!serverManager.isLoggedIn()) {
             val shouldSignIn = promptSignInOrSkip()
             if (shouldSignIn) {
-                updateStatus("Login required — opening browser…")
                 val authOk = loginWithTimeout(timeoutMs = 120_000)
                 if (!authOk && !serverManager.isLoggedIn()) {
-                    updateStatus("Browser login failed — enter API key manually")
                     val apiKey = requestApiKey()
                     if (apiKey.isNotBlank()) {
-                        val loginOk = serverManager.loginWithApiKey(apiKey)
-                        if (!loginOk) {
-                            updateDetail("Login failed — you can add keys in Settings")
-                        }
+                        serverManager.loginWithApiKey(apiKey)
                     }
                 }
-            } else {
-                updateDetail("Skipped sign-in — configure keys in Settings anytime")
             }
         }
-        updateStatus("Ready")
 
         // Step 6: Health check (skip if no credentials)
-        updateStatus("Verifying setup…")
         if (serverManager.isLoggedIn()) {
-            val healthOk = serverManager.healthCheck { msg -> updateDetail(msg) }
-            if (!healthOk) {
-                updateDetail("API check failed - you can configure keys in Settings")
-            } else {
-                updateStatus("API verified ✓")
-            }
-        } else {
-            updateStatus("Free mode - no API key configured")
-            updateDetail("Open Settings to add OpenAI/OpenRouter keys")
+            serverManager.healthCheck { msg -> Log.d(TAG, "[health] $msg") }
         }
 
         // Step 6b: Ensure Freebuff extension is installed
-        updateStatus("Installing Freebuff extension…")
         ensureFreebuffExtension()
 
         // Step 7: Configure and start OpenClaw (only if explicitly enabled)
@@ -460,90 +435,44 @@ class MainActivity : AppCompatActivity() {
         val enableOpenClaw = prefs.getBoolean("enable_openclaw", false)
 
         if (serverManager.isOpenClawInstalled()) {
-            updateStatus("Loading extensions…")
             val extensions = extensionManager.loadExtensions()
-            updateDetail("Found ${extensions.size} extension(s)")
+            Log.d(TAG, "Found ${extensions.size} extension(s)")
 
             if (enableOpenClaw && serverManager.isLoggedIn()) {
-                updateStatus("Configuring OpenClaw…")
                 serverManager.configureOpenClawAuth()
-
-                updateStatus("Starting OpenClaw gateway…")
                 serverManager.startOpenClawGateway()
-
-                updateStatus("Starting OpenClaw Control UI…")
                 serverManager.startOpenClawControlUiServer()
-            } else {
-                updateStatus("OpenClaw gateway disabled")
-                updateDetail("Enable it in Settings if you want the OpenClaw Control UI")
             }
         }
 
-        // Step 8: Start the bundled web UI server (primary home screen)
-        updateStatus("Starting home screen…")
-        val bundledStarted = serverManager.startBundledWebServer()
-        if (!bundledStarted) {
-            Log.w(TAG, "Bundled web server failed to start; loading fallback page")
-            runOnUiThread {
-                showLoading(false)
-                webView.visibility = View.VISIBLE
-                btnWebviewSettings.visibility = View.VISIBLE
-                findViewById<View>(R.id.loadingActions).visibility = View.VISIBLE
-                loadFallbackPage()
-            }
-            return
-        }
-
-        // Step 9: Wait briefly for the bundled server to be ready, then show UI
-        updateStatus("Loading home screen…")
-        val bundledReady = serverManager.waitForServer(timeoutMs = 15_000)
-        if (!bundledReady) {
-            throw RuntimeException("Home screen server did not start in time")
-        }
-
-        // Step 10: Show web UI and settings buttons
-        runOnUiThread {
-            showLoading(false)
-            webView.visibility = View.VISIBLE
-            btnWebviewSettings.visibility = View.VISIBLE
-            // Also show settings button on loading screen for easy access
-            findViewById<View>(R.id.loadingActions).visibility = View.VISIBLE
-            webView.loadUrl("http://127.0.0.1:${CodexServerManager.SERVER_PORT}/")
-        }
-
-        // Step 11 (background): Optionally start the full codex-web-local server
-        // if it is installed. The bundled UI remains usable regardless because
-        // the full server runs on a separate port.
-        Thread {
-            try {
-                if (serverManager.isCodexInstalled()) {
-                    Log.i(TAG, "Codex CLI installed; attempting to start full codex-web-local server")
-                    serverManager.installServerBundle { msg -> Log.d(TAG, "[server-bundle] $msg") }
-
-                    val fullStarted = serverManager.startServer(CodexServerManager.FULL_SERVER_PORT)
-                    if (fullStarted) {
-                        val fullReady = serverManager.waitForServer(
-                            port = CodexServerManager.FULL_SERVER_PORT,
-                            timeoutMs = 60_000,
-                        )
-                        if (fullReady) {
-                            runOnUiThread {
-                                Log.i(TAG, "Full codex-web-local server ready; switching WebView")
-                                webView.loadUrl("http://127.0.0.1:${CodexServerManager.FULL_SERVER_PORT}/")
-                            }
+        // Step 8: Start the full codex-web-local server in the background.
+        // The bundled UI loaded from assets remains usable regardless.
+        if (serverManager.isCodexInstalled()) {
+            val fullStarted = serverManager.startServer(CodexServerManager.FULL_SERVER_PORT)
+            if (fullStarted) {
+                val fullReady = serverManager.waitForServer(
+                    port = CodexServerManager.FULL_SERVER_PORT,
+                    timeoutMs = 60_000,
+                )
+                if (fullReady) {
+                    runOnUiThread {
+                        // Only switch to the full server if the user is still on the
+                        // bundled local UI. This avoids interrupting an active session.
+                        val currentUrl = webView.url
+                        if (currentUrl == null || currentUrl.startsWith("file:///android_asset/")) {
+                            Log.i(TAG, "Full codex-web-local server ready; switching WebView")
+                            webView.loadUrl("http://127.0.0.1:${CodexServerManager.FULL_SERVER_PORT}/")
                         } else {
-                            Log.w(TAG, "Full codex-web-local server did not become ready; keeping bundled UI")
+                            Log.i(TAG, "Full codex-web-local server ready; user already left local UI, not switching")
                         }
-                    } else {
-                        Log.w(TAG, "Full codex-web-local server failed to start; keeping bundled UI")
                     }
                 } else {
-                    Log.i(TAG, "Codex CLI not installed; using bundled home screen only")
+                    Log.w(TAG, "Full codex-web-local server did not become ready; keeping bundled UI")
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Full codex-web-local server could not start: ${e.message}")
+            } else {
+                Log.w(TAG, "Full codex-web-local server failed to start; keeping bundled UI")
             }
-        }.start()
+        }
     }
 
     /**
@@ -681,27 +610,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLoading(show: Boolean) {
         loadingOverlay.visibility = if (show) View.VISIBLE else View.GONE
-    }
-
-    private fun setStatus(text: String, detail: String? = null) {
-        statusText.text = text
-        if (detail != null) {
-            statusDetail.text = detail
-            statusDetail.visibility = View.VISIBLE
-        } else {
-            statusDetail.visibility = View.GONE
-        }
-    }
-
-    private fun updateStatus(text: String, detail: String? = null) {
-        runOnUiThread { setStatus(text, detail) }
-    }
-
-    private fun updateDetail(text: String) {
-        runOnUiThread {
-            statusDetail.text = text
-            statusDetail.visibility = View.VISIBLE
-        }
     }
 
     /**
