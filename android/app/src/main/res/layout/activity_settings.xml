@@ -108,7 +108,7 @@
                         android:layout_height="42dp"
                         android:layout_marginEnd="4dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#6366f1"
+                        app:backgroundTint="#6366f1"
                         android:text="@string/save"
                         android:textColor="#ffffff"
                         android:textSize="13sp" />
@@ -119,7 +119,7 @@
                         android:layout_height="42dp"
                         android:layout_marginStart="4dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#dc2626"
+                        app:backgroundTint="#dc2626"
                         android:text="@string/clear"
                         android:textColor="#ffffff"
                         android:textSize="13sp" />
@@ -207,7 +207,7 @@
                         android:layout_height="42dp"
                         android:layout_marginEnd="4dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#6366f1"
+                        app:backgroundTint="#6366f1"
                         android:text="@string/save"
                         android:textColor="#ffffff"
                         android:textSize="13sp" />
@@ -218,7 +218,7 @@
                         android:layout_height="42dp"
                         android:layout_marginStart="4dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#dc2626"
+                        app:backgroundTint="#dc2626"
                         android:text="@string/clear"
                         android:textColor="#ffffff"
                         android:textSize="13sp" />
@@ -306,7 +306,7 @@
                         android:layout_height="42dp"
                         android:layout_marginEnd="4dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#6366f1"
+                        app:backgroundTint="#6366f1"
                         android:text="@string/save"
                         android:textColor="#ffffff"
                         android:textSize="13sp" />
@@ -317,7 +317,7 @@
                         android:layout_height="42dp"
                         android:layout_marginStart="4dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#dc2626"
+                        app:backgroundTint="#dc2626"
                         android:text="@string/clear"
                         android:textColor="#ffffff"
                         android:textSize="13sp" />
@@ -418,7 +418,7 @@
                         android:layout_height="42dp"
                         android:layout_marginEnd="4dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#22c55e"
+                        app:backgroundTint="#22c55e"
                         android:text="@string/server_start"
                         android:textColor="#ffffff"
                         android:textSize="13sp" />
@@ -429,7 +429,7 @@
                         android:layout_height="42dp"
                         android:layout_marginStart="4dp"
                         android:layout_weight="1"
-                        android:backgroundTint="#ef4444"
+                        app:backgroundTint="#ef4444"
                         android:text="@string/server_stop"
                         android:textColor="#ffffff"
                         android:textSize="13sp" />
@@ -569,7 +569,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="42dp"
                     android:layout_marginTop="16dp"
-                    android:backgroundTint="#f59e0b"
+                    app:backgroundTint="#f59e0b"
                     android:text="@string/env_reinstall"
                     android:textColor="#ffffff"
                     android:textSize="13sp" />
