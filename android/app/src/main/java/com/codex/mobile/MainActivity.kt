@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import java.io.File
+import kotlin.io.walkTopDown
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
@@ -35,6 +36,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var serverManager: CodexServerManager
     private val extensionManager: ExtensionManager by lazy { ExtensionManager(this) }
+    private val paywallBypassScript: String by lazy {
+        try {
+            assets.open("paywall-bypass.js").bufferedReader().use { it.readText() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load paywall-bypass.js: ${e.message}")
+            ""
+        }
+    }
     private lateinit var btnSettings: Button
     private lateinit var btnWebviewSettings: ImageButton
 
@@ -77,6 +86,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Inject the paywall-bypass script into the WebView. This runs on every
+     * page start and finish so dynamically loaded SPAs also get the bypass.
+     */
+    private fun injectPaywallBypass(view: WebView) {
+        if (paywallBypassScript.isBlank()) return
+        try {
+            view.evaluateJavascript(paywallBypassScript, null)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to inject paywall bypass: ${e.message}")
+        }
+    }
+
+    /**
      * Ensure the Freebuff extension is installed in the global OpenClaw
      * extensions directory. If it is bundled in the APK assets, extract it.
      */
@@ -105,6 +127,50 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to install Freebuff extension: ${e.message}")
+        }
+    }
+
+    /**
+     * Patch the extracted codex-web-local JS bundles to remove common
+     * paywall/premium checks. This is a safety net in case the injected
+     * bypass script is not enough.
+     */
+    private fun patchServerBundlePaywallChecks() {
+        try {
+            val paths = BootstrapInstaller.getPaths(this)
+            val bundleDir = File(paths.prefixDir, "lib/node_modules/codex-web-local/dist")
+            if (!bundleDir.isDirectory) {
+                Log.d(TAG, "Server bundle directory not found, skipping paywall patch")
+                return
+            }
+
+            bundleDir.walkTopDown()
+                .filter { it.isFile && (it.name.endsWith(".js") || it.name.endsWith(".mjs")) }
+                .forEach { file ->
+                    try {
+                        var content = file.readText()
+                        val original = content
+
+                        // Common minified/unminified paywall checks
+                        content = content.replace(Regex("isPremium\\s*:\\s*!1"), "isPremium:!0")
+                        content = content.replace(Regex("isPremium\\s*:\\s*false"), "isPremium:true")
+                        content = content.replace(Regex("paywallActive\\s*:\\s*!0"), "paywallActive:!1")
+                        content = content.replace(Regex("paywallActive\\s*:\\s*true"), "paywallActive:false")
+                        content = content.replace(Regex("hasSubscription\\s*:\\s*!1"), "hasSubscription:!0")
+                        content = content.replace(Regex("hasSubscription\\s*:\\s*false"), "hasSubscription:true")
+                        content = content.replace(Regex("isHermesUnlocked\\s*:\\s*!1"), "isHermesUnlocked:!0")
+                        content = content.replace(Regex("isHermesUnlocked\\s*:\\s*false"), "isHermesUnlocked:true")
+
+                        if (content != original) {
+                            file.writeText(content)
+                            Log.d(TAG, "Patched paywall checks in ${file.absolutePath}")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to patch ${file.name}: ${e.message}")
+                    }
+                }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to patch server bundle paywall checks: ${e.message}")
         }
     }
 
@@ -199,6 +265,16 @@ class MainActivity : AppCompatActivity() {
                 view: WebView,
                 url: String,
             ): Boolean = false
+
+            override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                injectPaywallBypass(view)
+            }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                super.onPageFinished(view, url)
+                injectPaywallBypass(view)
+            }
         }
 
         webView.addJavascriptInterface(CodebuffBridge(), "AndroidBridge")
@@ -296,6 +372,7 @@ class MainActivity : AppCompatActivity() {
         // Step 3a: Extract web UI from APK assets (every launch)
         updateStatus("Updating web UI…")
         serverManager.installServerBundle { msg -> updateDetail(msg) }
+        patchServerBundlePaywallChecks()
 
         // Step 3b: Install native platform binary
         if (!serverManager.isPlatformBinaryInstalled()) {
