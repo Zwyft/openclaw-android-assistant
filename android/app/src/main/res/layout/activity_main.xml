@@ -78,12 +78,11 @@
         android:layout_gravity="top|end"
         android:layout_marginTop="12dp"
         android:layout_marginEnd="12dp"
-        android:backgroundTint="#1e1b4b"
+        android:background="#1e1b4b"
         android:src="@android:drawable/ic_menu_manage"
         android:contentDescription="@string/settings"
         android:visibility="gone"
         android:scaleType="center"
-        android:elevation="6dp"
-        style="@style/Widget.Material3.Button.Tonal" />
+        android:elevation="6dp" />
 
 </FrameLayout>
