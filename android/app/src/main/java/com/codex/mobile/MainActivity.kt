@@ -13,8 +13,11 @@ import kotlin.io.walkTopDown
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.WebViewAssetLoader
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
@@ -32,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var loadingOverlay: View
     private lateinit var serverManager: CodexServerManager
+    private lateinit var assetLoader: WebViewAssetLoader
     private val extensionManager: ExtensionManager by lazy { ExtensionManager(this) }
     private val paywallBypassScript: String by lazy {
         try {
@@ -54,6 +58,9 @@ class MainActivity : AppCompatActivity() {
         btnWebviewSettings = findViewById(R.id.btnWebviewSettings)
 
         serverManager = CodexServerManager(this)
+        assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
 
         // Settings button on loading screen — visible after server is ready
         btnSettings.setOnClickListener {
@@ -74,14 +81,15 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Show the main AnyClaw UI immediately without waiting for any server.
-     * The bundled web assets are loaded directly from the APK.
+     * The bundled web assets are served through WebViewAssetLoader so the
+     * SPA gets a proper origin and CORS behaves like a normal website.
      */
     private fun showMainScreen() {
         runOnUiThread {
             showLoading(false)
             webView.visibility = View.VISIBLE
             btnWebviewSettings.visibility = View.VISIBLE
-            webView.loadUrl("file:///android_asset/web/index.html")
+            webView.loadUrl("https://appassets.androidplatform.net/assets/web/index.html")
         }
     }
 
@@ -316,6 +324,9 @@ class MainActivity : AppCompatActivity() {
                 url: String,
             ): Boolean = false
 
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest) =
+                assetLoader.shouldInterceptRequest(request.url) ?: super.shouldInterceptRequest(view, request)
+
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
                 injectPaywallBypass(view)
@@ -324,6 +335,14 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 super.onPageFinished(view, url)
                 injectPaywallBypass(view)
+            }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    Log.e(TAG, "Main frame error loading ${request.url}: $error")
+                    runOnUiThread { loadFallbackPage() }
+                }
             }
         }
 
@@ -459,7 +478,7 @@ class MainActivity : AppCompatActivity() {
                         // Only switch to the full server if the user is still on the
                         // bundled local UI. This avoids interrupting an active session.
                         val currentUrl = webView.url
-                        if (currentUrl == null || currentUrl.startsWith("file:///android_asset/")) {
+                        if (currentUrl == null || currentUrl.startsWith("https://appassets.androidplatform.net/assets/web/")) {
                             Log.i(TAG, "Full codex-web-local server ready; switching WebView")
                             webView.loadUrl("http://127.0.0.1:${CodexServerManager.FULL_SERVER_PORT}/")
                         } else {

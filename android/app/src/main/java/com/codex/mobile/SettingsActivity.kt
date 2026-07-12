@@ -240,71 +240,23 @@ class SettingsActivity : AppCompatActivity() {
 
     /**
      * Refresh the status display for a specific provider.
+     * File I/O happens on the calling thread; UI updates are posted to the main thread.
      */
     private fun refreshProviderStatus(providerId: String) {
-        val (statusView, inputView) = when (providerId) {
-            "openai" -> Pair(statusOpenAI, inputOpenAIKey)
-            "openrouter" -> Pair(statusOpenRouter, inputOpenRouterKey)
-            "opencode" -> Pair(statusOpenCode, inputOpenCodeKey)
-            else -> return
-        }
-
-        try {
-            val paths = BootstrapInstaller.getPaths(this)
-            val configDir = File(paths.homeDir, ".codex")
-
-            val hasKey = when (providerId) {
-                "openai" -> {
-                    val authFile = File(configDir, "auth.json")
-                    authFile.exists() && authFile.readText().contains("\"token\"")
-                }
-                "openrouter" -> {
-                    val authFile = File(configDir, "auth.json")
-                    authFile.exists() && authFile.readText().contains("\"openrouter\"")
-                }
-                "opencode" -> {
-                    val authFile = File(configDir, "opencode_auth.json")
-                    authFile.exists()
-                }
-                else -> false
-            }
-
-            if (hasKey) {
-                statusView.text = getString(R.string.provider_connected)
-                statusView.setTextColor(0xFF22c55e.toInt())
-                inputView.setText("••••••••••••••••")
-            } else {
-                statusView.text = getString(R.string.key_not_set)
-                statusView.setTextColor(0xFFf87171.toInt())
-                inputView.text?.clear()
-            }
-        } catch (e: Exception) {
-            statusView.text = getString(R.string.key_not_set)
-            statusView.setTextColor(0xFFf87171.toInt())
-        }
+        val status = readProviderStatus(providerId)
+        runOnUiThread { applyProviderStatus(providerId, status) }
     }
 
     // ── Server Management ──────────────────────────────────────────────────
 
     /**
      * Refresh the server status display.
+     * Reads server state on the calling thread and posts UI updates to the main thread.
      */
     private fun refreshServerStatus() {
         val running = serverManager.isRunning
-
-        if (running) {
-            labelServerStatus.text = getString(R.string.server_running)
-            serverStatusDot.setBackgroundResource(R.drawable.circle_green)
-            btnStartServer.isEnabled = false
-            btnStopServer.isEnabled = true
-        } else {
-            labelServerStatus.text = getString(R.string.server_stopped)
-            serverStatusDot.setBackgroundResource(R.drawable.circle_red)
-            btnStartServer.isEnabled = true
-            btnStopServer.isEnabled = false
-        }
-
-        serverPortValue.text = serverManager.runningServerPort?.toString() ?: "-"
+        val port = serverManager.runningServerPort
+        runOnUiThread { applyServerStatus(running, port) }
     }
 
     /**
@@ -371,53 +323,11 @@ class SettingsActivity : AppCompatActivity() {
 
     /**
      * Refresh environment installation status.
+     * Reads state on the calling thread and posts UI updates to the main thread.
      */
     private fun refreshEnvironmentStatus() {
-        try {
-            val paths = BootstrapInstaller.getPaths(this)
-
-            // Bootstrap
-            val bootstrapInstalled = BootstrapInstaller.isBootstrapInstalled(this)
-            if (bootstrapInstalled) {
-                envBootstrapStatus.text = getString(R.string.env_bootstrap_installed)
-                envBootstrapStatus.setTextColor(0xFF22c55e.toInt())
-            } else {
-                envBootstrapStatus.text = getString(R.string.env_bootstrap_not_installed)
-                envBootstrapStatus.setTextColor(0xFFf87171.toInt())
-            }
-
-            // Node.js
-            val nodeInstalled = serverManager.isNodeInstalled()
-            if (nodeInstalled) {
-                envNodeStatus.text = getString(R.string.env_bootstrap_installed)
-                envNodeStatus.setTextColor(0xFF22c55e.toInt())
-            } else {
-                envNodeStatus.text = getString(R.string.env_not_available)
-                envNodeStatus.setTextColor(0xFF94a3b8.toInt())
-            }
-
-            // Python
-            val pythonInstalled = serverManager.isPythonInstalled()
-            if (pythonInstalled) {
-                envPythonStatus.text = getString(R.string.env_bootstrap_installed)
-                envPythonStatus.setTextColor(0xFF22c55e.toInt())
-            } else {
-                envPythonStatus.text = getString(R.string.env_not_available)
-                envPythonStatus.setTextColor(0xFF94a3b8.toInt())
-            }
-
-            // Codex
-            val codexInstalled = serverManager.isCodexInstalled()
-            if (codexInstalled) {
-                envCodexStatus.text = getString(R.string.env_bootstrap_installed)
-                envCodexStatus.setTextColor(0xFF22c55e.toInt())
-            } else {
-                envCodexStatus.text = getString(R.string.env_not_available)
-                envCodexStatus.setTextColor(0xFF94a3b8.toInt())
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error refreshing environment status: ${e.message}")
-        }
+        val status = readEnvironmentStatus()
+        runOnUiThread { applyEnvironmentStatus(status) }
     }
 
     /**
@@ -489,22 +399,148 @@ class SettingsActivity : AppCompatActivity() {
 
     /**
      * Refresh all UI sections.
+     * File I/O is performed on a background thread and the resulting
+     * UI updates are posted back to the main thread to avoid
+     * CalledFromWrongThreadException crashes.
      */
     private fun refreshAll() {
         if (isRefreshing) return
         isRefreshing = true
 
         Thread {
-            refreshProviderStatus("openai")
-            refreshProviderStatus("openrouter")
-            refreshProviderStatus("opencode")
-            refreshServerStatus()
-            refreshEnvironmentStatus()
+            val openaiStatus = readProviderStatus("openai")
+            val openrouterStatus = readProviderStatus("openrouter")
+            val opencodeStatus = readProviderStatus("opencode")
+            val serverRunning = serverManager.isRunning
+            val serverPort = serverManager.runningServerPort
+            val envStatus = readEnvironmentStatus()
 
             mainHandler.post {
+                applyProviderStatus("openai", openaiStatus)
+                applyProviderStatus("openrouter", openrouterStatus)
+                applyProviderStatus("opencode", opencodeStatus)
+                applyServerStatus(serverRunning, serverPort)
+                applyEnvironmentStatus(envStatus)
                 isRefreshing = false
             }
         }.start()
+    }
+
+    private data class ProviderStatus(val hasKey: Boolean, val error: Boolean = false)
+
+    private fun readProviderStatus(providerId: String): ProviderStatus {
+        try {
+            val paths = BootstrapInstaller.getPaths(this)
+            val configDir = File(paths.homeDir, ".codex")
+
+            val hasKey = when (providerId) {
+                "openai" -> {
+                    val authFile = File(configDir, "auth.json")
+                    authFile.exists() && authFile.readText().contains("\"token\"")
+                }
+                "openrouter" -> {
+                    val authFile = File(configDir, "auth.json")
+                    authFile.exists() && authFile.readText().contains("\"openrouter\"")
+                }
+                "opencode" -> {
+                    val authFile = File(configDir, "opencode_auth.json")
+                    authFile.exists()
+                }
+                else -> false
+            }
+            return ProviderStatus(hasKey)
+        } catch (e: Exception) {
+            return ProviderStatus(false, true)
+        }
+    }
+
+    private fun applyProviderStatus(providerId: String, status: ProviderStatus) {
+        val (statusView, inputView) = when (providerId) {
+            "openai" -> Pair(statusOpenAI, inputOpenAIKey)
+            "openrouter" -> Pair(statusOpenRouter, inputOpenRouterKey)
+            "opencode" -> Pair(statusOpenCode, inputOpenCodeKey)
+            else -> return
+        }
+
+        if (status.hasKey) {
+            statusView.text = getString(R.string.provider_connected)
+            statusView.setTextColor(0xFF22c55e.toInt())
+            inputView.setText("••••••••••••••••")
+        } else {
+            statusView.text = getString(R.string.key_not_set)
+            statusView.setTextColor(0xFFf87171.toInt())
+            inputView.text?.clear()
+        }
+    }
+
+    private fun applyServerStatus(running: Boolean, port: Int?) {
+        if (running) {
+            labelServerStatus.text = getString(R.string.server_running)
+            serverStatusDot.setBackgroundResource(R.drawable.circle_green)
+            btnStartServer.isEnabled = false
+            btnStopServer.isEnabled = true
+        } else {
+            labelServerStatus.text = getString(R.string.server_stopped)
+            serverStatusDot.setBackgroundResource(R.drawable.circle_red)
+            btnStartServer.isEnabled = true
+            btnStopServer.isEnabled = false
+        }
+        serverPortValue.text = port?.toString() ?: "-"
+    }
+
+    private data class EnvironmentStatus(
+        val bootstrapInstalled: Boolean,
+        val nodeInstalled: Boolean,
+        val pythonInstalled: Boolean,
+        val codexInstalled: Boolean
+    )
+
+    private fun readEnvironmentStatus(): EnvironmentStatus {
+        return try {
+            val paths = BootstrapInstaller.getPaths(this)
+            EnvironmentStatus(
+                bootstrapInstalled = BootstrapInstaller.isBootstrapInstalled(this),
+                nodeInstalled = serverManager.isNodeInstalled(),
+                pythonInstalled = serverManager.isPythonInstalled(),
+                codexInstalled = serverManager.isCodexInstalled()
+            )
+        } catch (e: Exception) {
+            EnvironmentStatus(false, false, false, false)
+        }
+    }
+
+    private fun applyEnvironmentStatus(status: EnvironmentStatus) {
+        if (status.bootstrapInstalled) {
+            envBootstrapStatus.text = getString(R.string.env_bootstrap_installed)
+            envBootstrapStatus.setTextColor(0xFF22c55e.toInt())
+        } else {
+            envBootstrapStatus.text = getString(R.string.env_bootstrap_not_installed)
+            envBootstrapStatus.setTextColor(0xFFf87171.toInt())
+        }
+
+        if (status.nodeInstalled) {
+            envNodeStatus.text = getString(R.string.env_bootstrap_installed)
+            envNodeStatus.setTextColor(0xFF22c55e.toInt())
+        } else {
+            envNodeStatus.text = getString(R.string.env_not_available)
+            envNodeStatus.setTextColor(0xFF94a3b8.toInt())
+        }
+
+        if (status.pythonInstalled) {
+            envPythonStatus.text = getString(R.string.env_bootstrap_installed)
+            envPythonStatus.setTextColor(0xFF22c55e.toInt())
+        } else {
+            envPythonStatus.text = getString(R.string.env_not_available)
+            envPythonStatus.setTextColor(0xFF94a3b8.toInt())
+        }
+
+        if (status.codexInstalled) {
+            envCodexStatus.text = getString(R.string.env_bootstrap_installed)
+            envCodexStatus.setTextColor(0xFF22c55e.toInt())
+        } else {
+            envCodexStatus.text = getString(R.string.env_not_available)
+            envCodexStatus.setTextColor(0xFF94a3b8.toInt())
+        }
     }
 
     // ── Utility ────────────────────────────────────────────────────────────
