@@ -967,7 +967,7 @@ H3
 
         val pb = ProcessBuilder(shell, "-c", "exec $serverScript")
         pb.environment().clear()
-        pb.environment().putAll(env)
+        pb.environment().putAll(serverEnv)
         pb.directory(File(paths.homeDir))
         pb.redirectErrorStream(true)
 
