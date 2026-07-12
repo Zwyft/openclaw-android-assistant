@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusDetail: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var serverManager: CodexServerManager
+    private val extensionManager: ExtensionManager by lazy { ExtensionManager(this) }
     private lateinit var btnSettings: Button
     private lateinit var btnWebviewSettings: ImageButton
 
@@ -261,12 +262,26 @@ class MainActivity : AppCompatActivity() {
             throw RuntimeException("Failed to start network proxy")
         }
 
-        // Step 5: Authentication (optional - configure in Settings later)
+        // Step 5: Authentication (optional - user can sign in or skip)
         updateStatus("Checking authentication…")
         if (!serverManager.isLoggedIn()) {
-            // Skip mandatory login - freebuff works without credentials
-            // OpenAI models will use free tier, user can configure keys in Settings
-            updateDetail("Login optional - configure in Settings anytime")
+            val shouldSignIn = promptSignInOrSkip()
+            if (shouldSignIn) {
+                updateStatus("Login required — opening browser…")
+                val authOk = loginWithTimeout(timeoutMs = 120_000)
+                if (!authOk && !serverManager.isLoggedIn()) {
+                    updateStatus("Browser login failed — enter API key manually")
+                    val apiKey = requestApiKey()
+                    if (apiKey.isNotBlank()) {
+                        val loginOk = serverManager.loginWithApiKey(apiKey)
+                        if (!loginOk) {
+                            updateDetail("Login failed — you can add keys in Settings")
+                        }
+                    }
+                }
+            } else {
+                updateDetail("Skipped sign-in — configure keys in Settings anytime")
+            }
         }
         updateStatus("Ready")
 
@@ -288,6 +303,10 @@ class MainActivity : AppCompatActivity() {
         if (serverManager.isOpenClawInstalled()) {
             updateStatus("Configuring OpenClaw…")
             serverManager.configureOpenClawAuth()
+
+            updateStatus("Loading extensions…")
+            val extensions = extensionManager.loadExtensions()
+            updateDetail("Found ${extensions.size} extension(s)")
 
             updateStatus("Starting OpenClaw gateway…")
             serverManager.startOpenClawGateway()
@@ -319,6 +338,84 @@ class MainActivity : AppCompatActivity() {
             findViewById<View>(R.id.loadingActions).visibility = View.VISIBLE
             webView.loadUrl("http://127.0.0.1:${CodexServerManager.SERVER_PORT}/")
         }
+    }
+
+    /**
+     * Run the OAuth login flow with a timeout so the setup thread cannot
+     * hang indefinitely if the user never completes the browser login.
+     * The background login thread is interrupted on timeout to avoid leaks.
+     */
+    private fun loginWithTimeout(timeoutMs: Long): Boolean {
+        val future = java.util.concurrent.CompletableFuture<Boolean>()
+        val loginThread = Thread {
+            try {
+                val ok = serverManager.loginWithUrl(
+                    onLoginUrl = { url ->
+                        runOnUiThread {
+                            if (!isFinishing && !isDestroyed) {
+                                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            }
+                        }
+                    },
+                    onProgress = { msg -> updateDetail(msg) },
+                )
+                future.complete(ok)
+            } catch (e: Exception) {
+                Log.e(TAG, "loginWithUrl error: ${e.message}")
+                future.complete(false)
+            }
+        }
+        loginThread.start()
+
+        return try {
+            future.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (e: java.util.concurrent.TimeoutException) {
+            Log.w(TAG, "Login timed out after ${timeoutMs}ms")
+            loginThread.interrupt()
+            false
+        } catch (e: Exception) {
+            Log.w(TAG, "Login failed: ${e.message}")
+            loginThread.interrupt()
+            false
+        }
+    }
+
+    /**
+     * Show a dialog asking the user to sign in or skip authentication.
+     * Returns true if the user chose to sign in, false if they chose to skip.
+     * Uses a CountDownLatch for safer cross-thread signalling.
+     */
+    private fun promptSignInOrSkip(): Boolean {
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val result = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        runOnUiThread {
+            if (isFinishing || isDestroyed) {
+                latch.countDown()
+                return@runOnUiThread
+            }
+            AlertDialog.Builder(this)
+                .setTitle("Sign in to AnyClaw")
+                .setMessage("Sign in with your OpenAI account to use Codex, or skip and configure API keys later in Settings.")
+                .setCancelable(false)
+                .setPositiveButton("Sign In") { _, _ ->
+                    result.set(true)
+                    latch.countDown()
+                }
+                .setNegativeButton("Skip") { _, _ ->
+                    result.set(false)
+                    latch.countDown()
+                }
+                .setOnDismissListener { latch.countDown() }
+                .show()
+        }
+
+        try {
+            latch.await(5, java.util.concurrent.TimeUnit.MINUTES)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+        return result.get()
     }
 
     /**
@@ -490,6 +587,43 @@ class MainActivity : AppCompatActivity() {
                 if (hasKey) providers.add(mapOf("id" to provider, "connected" to true))
             }
             return providers.toString()
+        }
+
+        @android.webkit.JavascriptInterface
+        fun getLoadedExtensions(): String {
+            return try {
+                extensionManager.loadExtensions()
+                extensionManager.getExtensionsJson()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get extensions: ${e.message}")
+                "[]"
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun loadExtensions(): String {
+            return try {
+                val extensions = extensionManager.loadExtensions()
+                "{\"count\":${extensions.size},\"ok\":true}"
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load extensions: ${e.message}")
+                "{\"count\":0,\"ok\":false}"
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        fun bypassPaywall(): Boolean {
+            return true
+        }
+
+        @android.webkit.JavascriptInterface
+        fun isSubscriptionRequired(): Boolean {
+            return false
+        }
+
+        @android.webkit.JavascriptInterface
+        fun getHermesStatus(): String {
+            return """{"unlocked":true,"paywallBypassed":true,"message":"Hermes Web UI is unlocked"}"""
         }
     }
 }

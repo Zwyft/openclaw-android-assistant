@@ -910,22 +910,34 @@ H3
         }
 
         val paths = BootstrapInstaller.getPaths(context)
-        val env = buildEnvironment(paths)
-        val prefix = paths.prefixDir
-        val controlUiRoot = "$prefix/lib/node_modules/openclaw/dist/control-ui"
+        val controlUiRoot = "$paths.prefixDir/lib/node_modules/openclaw/dist/control-ui"
 
         if (!File(controlUiRoot).exists()) {
             Log.w(TAG, "OpenClaw control-ui directory not found at $controlUiRoot")
             return false
         }
 
+        openClawControlUiProcess = startStaticServer(controlUiRoot, OPENCLAW_CONTROL_UI_PORT, "openclaw-ui")
+        Thread.sleep(1000)
+        Log.i(TAG, "OpenClaw Control UI server started on port $OPENCLAW_CONTROL_UI_PORT")
+        return true
+    }
+
+    /**
+     * Shared helper to start a Node.js static file server for a given root
+     * directory and port. Returns the started Process.
+     */
+    private fun startStaticServer(root: String, port: Int, logTag: String, env: Map<String, String>? = null): Process {
+        val paths = BootstrapInstaller.getPaths(context)
+        val serverEnv = env ?: buildEnvironment(paths)
         val shell = "${paths.prefixDir}/bin/sh"
+
         val serverScript = """
             node -e "
               const http = require('http');
               const fs = require('fs');
               const path = require('path');
-              const root = '$controlUiRoot';
+              const root = '$root';
               const mimeTypes = {
                 '.html':'text/html','.js':'application/javascript',
                 '.css':'text/css','.json':'application/json',
@@ -949,7 +961,7 @@ H3
                   res.writeHead(200, {'Content-Type': mimeTypes[ext]||'application/octet-stream'});
                   res.end(data);
                 });
-              }).listen($OPENCLAW_CONTROL_UI_PORT, '127.0.0.1', () => console.log('Control UI on port $OPENCLAW_CONTROL_UI_PORT'));
+              }).listen($port, '127.0.0.1', () => console.log('Static server on port $port'));
             " 2>&1
         """.trimIndent()
 
@@ -960,21 +972,18 @@ H3
         pb.redirectErrorStream(true)
 
         val proc = pb.start()
-        openClawControlUiProcess = proc
 
         Thread {
             val reader = BufferedReader(InputStreamReader(proc.inputStream))
             var line = reader.readLine()
             while (line != null) {
-                Log.d(TAG, "[openclaw-ui] $line")
+                Log.d(TAG, "[$logTag] $line")
                 line = reader.readLine()
             }
-            Log.i(TAG, "OpenClaw Control UI server exited with code: ${proc.waitFor()}")
+            Log.i(TAG, "Static server exited with code: ${proc.waitFor()}")
         }.start()
 
-        Thread.sleep(1000)
-        Log.i(TAG, "OpenClaw Control UI server started on port $OPENCLAW_CONTROL_UI_PORT")
-        return true
+        return proc
     }
 
     fun installCodex(onProgress: (String) -> Unit): Boolean {
@@ -1036,7 +1045,34 @@ WEOF
             Log.d(TAG, "No bundled server-bundle asset, will use npm: ${e.message}")
         }
 
-        return false
+        // Fallback: install codex-web-local from npm if not bundled in APK assets.
+        onProgress("Server bundle not in assets — installing from npm…")
+        return installCodexWebLocalFromNpm(onProgress)
+    }
+
+    /**
+     * Install codex-web-local from npm as a fallback when the APK does not
+     * bundle the server bundle assets. This keeps the app usable even when
+     * the prebuilt bundle is missing.
+     */
+    private fun installCodexWebLocalFromNpm(onProgress: (String) -> Unit): Boolean {
+        val paths = BootstrapInstaller.getPaths(context)
+        val prefix = paths.prefixDir
+        val npmCli = "$prefix/lib/node_modules/npm/bin/npm-cli.js"
+
+        if (!File(npmCli).exists()) {
+            Log.e(TAG, "npm CLI not found, cannot install codex-web-local")
+            return false
+        }
+
+        val installCmd = "node $npmCli install -g codex-web-local 2>&1"
+        val code = runInPrefix(installCmd, onOutput = { onProgress(it) })
+        if (code != 0) {
+            Log.e(TAG, "npm install codex-web-local failed with code $code")
+            return false
+        }
+
+        return File(paths.prefixDir, "lib/node_modules/codex-web-local/dist-cli/index.js").exists()
     }
 
     /**
@@ -1320,6 +1356,10 @@ WEOF
     /**
      * Start the codex-web-local server. The CONNECT proxy must be running
      * and authentication must have been completed first.
+     *
+     * If the codex-web-local package is missing or fails to start, a minimal
+     * fallback static server is started so the WebView always has something
+     * to display and the user can reach Settings.
      */
     fun startServer(): Boolean {
         if (isRunning) {
@@ -1333,14 +1373,14 @@ WEOF
         env["HTTP_PROXY"] = "http://127.0.0.1:$PROXY_PORT"
 
         val serverScript = "${paths.prefixDir}/lib/node_modules/codex-web-local/dist-cli/index.js"
+        val shell = "${paths.prefixDir}/bin/sh"
+
         if (!File(serverScript).exists()) {
-            Log.e(TAG, "Server script not found: $serverScript")
-            return false
+            Log.w(TAG, "codex-web-local not found; starting fallback static server")
+            return startFallbackStaticServer(env)
         }
 
-        val shell = "${paths.prefixDir}/bin/sh"
         val command = "exec node $serverScript --port $SERVER_PORT --no-password"
-
         Log.i(TAG, "Starting server: $command")
 
         val pb = ProcessBuilder(shell, "-c", command)
@@ -1364,6 +1404,37 @@ WEOF
 
         return true
     }
+
+    /**
+     * Start a minimal Node.js static file server as a fallback when the
+     * codex-web-local package is unavailable. Serves a tiny bundled HTML
+     * page from the APK assets so the app never shows a blank screen.
+     */
+    private fun startFallbackStaticServer(env: Map<String, String>): Boolean {
+        val paths = BootstrapInstaller.getPaths(context)
+        val fallbackDir = File(paths.homeDir, "fallback-server")
+        fallbackDir.mkdirs()
+
+        // Write a minimal fallback page from APK resources if not already present.
+        val indexFile = File(fallbackDir, "index.html")
+        if (!indexFile.exists()) {
+            try {
+                context.resources.openRawResource(com.codex.mobile.R.raw.fallback).use { input ->
+                    indexFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not read fallback.html resource: ${e.message}")
+                indexFile.writeText("<html><body style='background:#020617;color:#e2e8f0;'>AnyClaw ready</body></html>")
+            }
+        }
+
+        serverProcess = startStaticServer(fallbackDir.absolutePath, SERVER_PORT, "fallback-server", env)
+        return true
+    }
+
+
 
     fun waitForServer(timeoutMs: Long = 60_000): Boolean {
         val deadline = System.currentTimeMillis() + timeoutMs
