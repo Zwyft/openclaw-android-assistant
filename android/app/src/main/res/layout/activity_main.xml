@@ -64,8 +64,7 @@
                 app:backgroundTint="#6366f1"
                 android:text="@string/settings"
                 android:textColor="#ffffff"
-                android:textSize="14sp"
-                style="@style/Widget.Material3.Button.Tonal" />
+                android:textSize="14sp" />
 
         </LinearLayout>
 
